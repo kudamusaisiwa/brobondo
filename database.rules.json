@@ -1,0 +1,61 @@
+{
+  "rules": {
+    "messages": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "$messageId": {
+        ".validate": "newData.hasChildren(['text', 'userId', 'userName', 'timestamp'])",
+        "text": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 1000"
+        },
+        "userId": {
+          ".validate": "newData.isString() && newData.val() === auth.uid"
+        },
+        "userName": {
+          ".validate": "newData.isString()"
+        },
+        "timestamp": {
+          ".validate": "newData.val() <= now"
+        },
+        "mentions": {
+          "$userId": {
+            ".validate": "newData.isString()"
+          }
+        },
+        "attachment": {
+          ".validate": "!newData.exists() || (newData.hasChildren(['type', 'id', 'title']))",
+          "type": {
+            ".validate": "newData.isString() && (newData.val() === 'customer' || newData.val() === 'order' || newData.val() === 'payment')"
+          },
+          "id": {
+            ".validate": "newData.isString()"
+          },
+          "title": {
+            ".validate": "newData.isString()"
+          },
+          "subtitle": {
+            ".validate": "!newData.exists() || newData.isString()"
+          },
+          "amount": {
+            ".validate": "!newData.exists() || newData.isNumber()"
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "presence": {
+      "$userId": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $userId",
+        "lastOnline": {
+          ".validate": "newData.val() <= now"
+        },
+        "status": {
+          ".validate": "newData.isString() && (newData.val() === 'online' || newData.val() === 'offline')"
+        }
+      }
+    }
+  }
+}

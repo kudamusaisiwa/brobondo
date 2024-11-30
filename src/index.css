@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Chart theme variables */
+    --chart-grid: theme('colors.gray.200');
+    --chart-text: theme('colors.gray.600');
+    --chart-revenue: theme('colors.primary.500');
+    --chart-outstanding: theme('colors.error.500');
+  }
+
+  .dark {
+    /* Dark mode chart theme */
+    --chart-grid: theme('colors.gray.700');
+    --chart-text: theme('colors.gray.400');
+    --chart-revenue: theme('colors.primary.400');
+    --chart-outstanding: theme('colors.error.400');
+  }
+}
+
+@layer components {
+  .modern-input {
+    @apply w-full px-6 py-4 text-lg rounded-lg border-gray-300 dark:border-gray-600 shadow-sm
+    focus:border-primary-500 focus:ring-primary-500 focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-900
+    placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all duration-200
+    bg-white dark:bg-gray-700 text-gray-900 dark:text-white;
+  }
+
+  .modern-select {
+    @apply w-full px-6 py-4 text-lg rounded-lg border-gray-300 dark:border-gray-600 shadow-sm
+    focus:border-primary-500 focus:ring-primary-500 focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-900
+    transition-all duration-200
+    bg-white dark:bg-gray-700 text-gray-900 dark:text-white;
+  }
+
+  .modern-textarea {
+    @apply w-full px-6 py-4 text-lg rounded-lg border-gray-300 dark:border-gray-600 shadow-sm
+    focus:border-primary-500 focus:ring-primary-500 focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-900
+    placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all duration-200 min-h-[120px]
+    bg-white dark:bg-gray-700 text-gray-900 dark:text-white;
+  }
+
+  .search-input {
+    @apply w-full pl-14 pr-6 py-4 text-lg rounded-lg border-gray-300 dark:border-gray-600 shadow-sm
+    focus:border-primary-500 focus:ring-primary-500 focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-900
+    placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-all duration-200
+    bg-white dark:bg-gray-700 text-gray-900 dark:text-white;
+  }
+
+  .btn-primary {
+    @apply px-6 py-4 text-lg font-semibold rounded-lg text-white 
+    bg-primary-500 hover:bg-primary-600 
+    focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500
+    disabled:bg-primary-300 dark:disabled:bg-primary-800
+    transition-all duration-200 shadow-sm hover:shadow-md;
+  }
+
+  .card {
+    @apply bg-white dark:bg-gray-800 rounded-lg shadow-soft-lg 
+    border border-gray-200 dark:border-gray-700
+    transition-all duration-200;
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
