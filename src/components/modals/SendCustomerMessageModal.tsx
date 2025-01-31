@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { X, Send } from 'lucide-react';
 import { Customer } from '../../types';
-import { manychatApi } from '../../services/manychat';
+import { manyContactApi } from '../../services/manycontact';
 import { Toaster, toast } from 'react-hot-toast';
 import { useCustomerStore } from '../../store/customerStore';
 import { useAuthStore } from '../../store/authStore';
@@ -12,13 +12,17 @@ interface SendCustomerMessageModalProps {
   onClose: () => void;
   customer: Customer;
   messageTemplate?: string;
+  onMessageSent?: () => void;
+  onMessageSending?: (sending: boolean) => void;
 }
 
 const SendCustomerMessageModal: React.FC<SendCustomerMessageModalProps> = ({ 
   isOpen = true, 
   onClose, 
   customer,
-  messageTemplate 
+  messageTemplate,
+  onMessageSent,
+  onMessageSending
 }) => {
   const [message, setMessage] = useState(messageTemplate || '');
   const [isSending, setIsSending] = useState(false);
@@ -26,58 +30,55 @@ const SendCustomerMessageModal: React.FC<SendCustomerMessageModalProps> = ({
   const { logActivity } = useActivityStore();
 
   const handleSendMessage = async () => {
+    console.log('Starting send message process...');
+    
     if (!message.trim()) {
+      console.log('Message is empty');
       toast.error('Please enter a message');
       return;
     }
 
     if (!customer.phone) {
-      toast.error('No phone number available for this customer');
+      console.log('No phone number available');
+      toast.error('No phone number available for this customer. Please add a phone number first.');
       return;
     }
 
     if (!user) {
+      console.log('No user found');
       toast.error('You must be logged in to send messages');
       return;
     }
 
     try {
       setIsSending(true);
+      onMessageSending?.(true);
+      console.log('Setting isSending to true');
       
-      let contactId = customer.manyChatId;
-
-      // If no ManyChat ID exists, create a new contact
-      if (!contactId) {
-        const contact = await manychatApi.createContact({
-          name: `${customer.firstName} ${customer.lastName}`.trim(),
-          number: customer.phone
-        });
-        contactId = contact.id;
-
-        // Update customer with new ManyChat ID
-        await useCustomerStore.getState().updateCustomer(customer.id, {
-          manyChatId: contactId
-        });
-
-        // Log contact creation
-        await logActivity({
-          type: 'contact_created',
-          message: `Created ManyChat contact for ${customer.firstName} ${customer.lastName}`,
-          userId: user.id,
-          userName: user.name || user.email || 'Unknown User',
-          entityId: customer.id,
-          entityType: 'customer',
-          metadata: {
-            manyChatId: contactId,
-            customerPhone: customer.phone
-          }
-        });
+      // Format phone number - remove all non-digits
+      const phone = customer.phone.replace(/\D/g, '');
+      console.log('Formatted phone:', phone);
+      
+      if (!phone) {
+        console.log('Invalid phone number format');
+        throw new Error('Invalid phone number format');
       }
 
-      // Send message through ManyChat
-      await manychatApi.sendManyChatMessage({
-        contactId,
-        message: message.trim()
+      // Check environment variables
+      if (!import.meta.env.VITE_MANYCONTACT_API_KEY) {
+        console.error('ManyContact API key is missing');
+        throw new Error('ManyContact API key is not configured');
+      }
+
+      if (!import.meta.env.VITE_MANYCONTACT_WHATSAPP_NUMBER) {
+        console.error('ManyContact WhatsApp number is missing');
+        throw new Error('ManyContact WhatsApp number is not configured');
+      }
+
+      // Send message through ManyContact
+      await manyContactApi.sendMessage({
+        number: phone,
+        text: message.trim()
       });
 
       // Log message sent activity
@@ -90,76 +91,86 @@ const SendCustomerMessageModal: React.FC<SendCustomerMessageModalProps> = ({
         entityType: 'customer',
         metadata: {
           messageContent: message.trim(),
-          manyChatId: contactId,
-          customerPhone: customer.phone
+          customerPhone: phone
         }
       });
 
+      console.log('Message sent successfully');
       toast.success('Message sent successfully');
-      setMessage('');
+      onMessageSent?.();
       onClose();
-    } catch (error) {
-      console.error('Failed to send message:', error);
-      
-      if (error instanceof Error) {
-        if (error.message.includes('No phone number')) {
-          toast.error('Unable to send message: No phone number found');
-        } else if (error.message.includes('404')) {
-          toast.error('Unable to send message: Contact not found');
-        } else {
-          toast.error(`Failed to send message: ${error.message}`);
-        }
-      } else {
-        toast.error('Failed to send message. Please try again.');
-      }
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      toast.error(error.message || 'Failed to send message');
     } finally {
       setIsSending(false);
+      onMessageSending?.(false);
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-md">
-        <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Send Message to {customer.firstName} {customer.lastName}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-          >
-            <X size={20} />
-          </button>
-        </div>
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex min-h-screen items-center justify-center p-4 text-center">
+        <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={onClose} />
+        
+        <div className="relative w-full max-w-md transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 p-6 text-left shadow-xl transition-all">
+          <div className="absolute right-4 top-4">
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
 
-        <div className="p-4">
-          <textarea
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            placeholder="Type your message here..."
-            className="w-full h-40 p-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-            disabled={isSending}
-          />
-        </div>
+          <div className="mt-3">
+            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-white">
+              Send Message to {customer.firstName} {customer.lastName}
+            </h3>
+            <div className="mt-2">
+              <textarea
+                rows={4}
+                className="w-full rounded-md border border-gray-300 dark:border-gray-600 p-2 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:border-primary-500 focus:ring-primary-500"
+                placeholder="Type your message here..."
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                disabled={isSending}
+              />
+            </div>
+          </div>
 
-        <div className="p-4 border-t dark:border-gray-700 flex justify-end">
-          <button
-            onClick={handleSendMessage}
-            disabled={isSending || !message.trim()}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${
-              isSending || !message.trim()
-                ? 'bg-gray-300 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-700'
-            } text-white`}
-          >
-            <Send size={16} />
-            <span>{isSending ? 'Sending...' : 'Send'}</span>
-          </button>
+          <div className="mt-5 flex justify-end space-x-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="btn-secondary"
+              disabled={isSending}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSendMessage}
+              className="btn-primary flex items-center"
+              disabled={isSending}
+            >
+              {isSending ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 h-4 w-4" />
+                  Send Message
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
-      <Toaster position="top-right" />
     </div>
   );
 };

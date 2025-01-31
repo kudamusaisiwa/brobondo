@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 import { 
   TrophyIcon, 
   StarIcon, 
@@ -12,7 +14,7 @@ import { usePaymentStore } from '../../store/paymentStore';
 import { useUserStore } from '../../store/userStore';
 import { useOrderStore } from '../../store/orderStore';
 
-type TimeRange = 'daily' | 'weekly' | 'monthly';
+type TimeRange = 'custom' | 'daily' | 'weekly' | 'monthly';
 
 interface SalesPerformer {
   id: string;
@@ -25,6 +27,7 @@ interface SalesPerformer {
   streak: number;
   previousRank?: number;
   currentRank?: number;
+  lastCustomerDate?: Date;
 }
 
 interface Badge {
@@ -82,29 +85,58 @@ export default function LeaderboardCard() {
   const [performers, setPerformers] = useState<SalesPerformer[]>([]);
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [totalDeals, setTotalDeals] = useState(0);
+  const [customStartDate, setCustomStartDate] = useState<Date | null>(null);
+  const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const { payments, getPaymentsByDateRange } = usePaymentStore();
   const { orders } = useOrderStore();
   const { users } = useUserStore();
 
+  // Calculate date range
+  const now = new Date();
+  const startDate = new Date();
+  
+  switch (timeRange) {
+    case 'daily':
+      startDate.setHours(0, 0, 0, 0);
+      break;
+    case 'weekly':
+      startDate.setDate(startDate.getDate() - 7);
+      break;
+    case 'monthly':
+      startDate.setMonth(startDate.getMonth() - 1);
+      break;
+    case 'custom':
+      // Use custom dates if available, otherwise default to weekly
+      if (customStartDate && customEndDate) {
+        startDate.setTime(customStartDate.getTime());
+        now.setTime(customEndDate.getTime());
+      } else {
+        startDate.setDate(startDate.getDate() - 7);
+      }
+      break;
+  }
+
+  const handleTimeRangeChange = (value: TimeRange) => {
+    setTimeRange(value);
+    if (value === 'custom') {
+      setShowDatePicker(true);
+    } else {
+      setShowDatePicker(false);
+    }
+  };
+
+  const handleDateRangeSelect = (start: Date | null, end: Date | null) => {
+    setCustomStartDate(start);
+    setCustomEndDate(end);
+    if (start && end) {
+      setShowDatePicker(false);
+    }
+  };
+
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Calculate date range
-        const now = new Date();
-        let startDate = new Date();
-        
-        switch (timeRange) {
-          case 'daily':
-            startDate.setHours(0, 0, 0, 0);
-            break;
-          case 'weekly':
-            startDate.setDate(startDate.getDate() - 7);
-            break;
-          case 'monthly':
-            startDate.setMonth(startDate.getMonth() - 1);
-            break;
-        }
-
         // Get payments for the date range
         const periodPayments = await getPaymentsByDateRange(startDate, now);
 
@@ -130,7 +162,8 @@ export default function LeaderboardCard() {
               conversionRate: 0,
               level: 1,
               badges: [],
-              streak: 0
+              streak: 0,
+              lastCustomerDate: undefined
             };
             // Initialize unique orders set for this sales rep
             uniqueOrdersMap.set(soldBy, new Set());
@@ -145,6 +178,14 @@ export default function LeaderboardCard() {
           if (!orderSet.has(payment.orderId)) {
             orderSet.add(payment.orderId);
             acc[soldBy].dealsCount = orderSet.size;
+            
+            // Update last customer date if this payment is more recent
+            if (payment.date) {
+              const paymentDate = payment.date instanceof Date ? payment.date : new Date(payment.date);
+              if (!acc[soldBy].lastCustomerDate || paymentDate > acc[soldBy].lastCustomerDate) {
+                acc[soldBy].lastCustomerDate = paymentDate;
+              }
+            }
           }
 
           // Update total orders for conversion rate
@@ -183,7 +224,7 @@ export default function LeaderboardCard() {
     };
 
     loadData();
-  }, [timeRange, users, orders, getPaymentsByDateRange]);
+  }, [timeRange, users, orders, getPaymentsByDateRange, customStartDate, customEndDate]);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
@@ -196,18 +237,40 @@ export default function LeaderboardCard() {
               TOP SALES
             </h2>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {timeRange === 'daily' ? 'Today' : timeRange === 'weekly' ? 'This Week' : 'This Month'}
+              {timeRange === 'custom' 
+                ? `${customStartDate?.toLocaleDateString()} - ${customEndDate?.toLocaleDateString()}`
+                : timeRange === 'daily' 
+                  ? 'Today' 
+                  : timeRange === 'weekly' 
+                    ? 'This Week' 
+                    : 'This Month'
+              }
             </p>
           </div>
-          <select
-            value={timeRange}
-            onChange={(e) => setTimeRange(e.target.value as TimeRange)}
-            className="rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
-          >
-            <option value="daily">Today</option>
-            <option value="weekly">This Week</option>
-            <option value="monthly">This Month</option>
-          </select>
+          <div className="flex flex-col items-end">
+            <select
+              value={timeRange}
+              onChange={(e) => handleTimeRangeChange(e.target.value as TimeRange)}
+              className="rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm mb-2"
+            >
+              <option value="daily">Today</option>
+              <option value="weekly">This Week</option>
+              <option value="monthly">This Month</option>
+              <option value="custom">Customer Range</option>
+            </select>
+            {showDatePicker && (
+              <div className="absolute mt-10 z-10">
+                <DatePicker
+                  selectsRange={true}
+                  startDate={customStartDate}
+                  endDate={customEndDate}
+                  onChange={(update: [Date | null, Date | null]) => handleDateRangeSelect(update[0], update[1])}
+                  isClearable={true}
+                  inline
+                />
+              </div>
+            )}
+          </div>
         </div>
         
         {/* Stats Overview */}
@@ -271,6 +334,12 @@ export default function LeaderboardCard() {
                               </motion.div>
                             );
                           })}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Last customer: {performer.lastCustomerDate 
+                            ? new Date(performer.lastCustomerDate).toLocaleDateString()
+                            : 'No customers yet'
+                          }
                         </div>
                       </div>
                     </div>

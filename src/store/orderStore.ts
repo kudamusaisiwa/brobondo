@@ -12,7 +12,9 @@ import {
   setDoc,
   deleteDoc,
   limit,
-  getDoc
+  getDoc,
+  serverTimestamp,
+  runTransaction
 } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { db } from '../lib/firebase';
@@ -24,6 +26,7 @@ import { useAuthStore } from './authStore';
 import { useProductStore } from './productStore';
 import { generateOrderNumber } from '../utils/orderNumber';
 import type { Order } from '../types';
+import { getAuth } from 'firebase/auth';
 
 // Helper functions
 const groupBy = <T>(array: T[], key: (item: T) => string): { [key: string]: T[] } => {
@@ -37,17 +40,46 @@ const groupBy = <T>(array: T[], key: (item: T) => string): { [key: string]: T[] 
   }, {} as { [key: string]: T[] });
 };
 
-const validateOrder = (orderData: any) => {
+const validateOrder = async (orderData: any) => {
+  // Basic field validation
   if (!orderData.customerId) throw new Error('Customer ID is required');
   if (!orderData.products || !Array.isArray(orderData.products)) throw new Error('Products must be an array');
   if (!orderData.totalAmount) throw new Error('Total amount is required');
   
+  // Verify customer exists
+  const customerRef = doc(db, 'customers', orderData.customerId);
+  const customerDoc = await getDoc(customerRef);
+  if (!customerDoc.exists()) {
+    throw new Error('Customer does not exist');
+  }
+
+  // Get product store to verify prices
+  const { products } = useProductStore.getState();
+  
   // Validate each product in the array
-  orderData.products.forEach((product: any, index: number) => {
+  for (const [index, product] of orderData.products.entries()) {
     if (!product.productId) throw new Error(`Product ID is required for product at index ${index}`);
     if (typeof product.quantity !== 'number') throw new Error(`Quantity must be a number for product at index ${index}`);
     if (typeof product.unitPrice !== 'number') throw new Error(`Unit price must be a number for product at index ${index}`);
-  });
+    
+    // Verify product exists and price matches
+    const dbProduct = products.find(p => p.id === product.productId);
+    if (!dbProduct) {
+      throw new Error(`Product with ID ${product.productId} does not exist`);
+    }
+    if (product.unitPrice !== dbProduct.basePrice) {
+      throw new Error(`Price mismatch for product ${dbProduct.name}. Expected ${dbProduct.basePrice}, got ${product.unitPrice}`);
+    }
+  }
+
+  // Verify total amount matches sum of products
+  const calculatedTotal = orderData.products.reduce(
+    (sum: number, product: any) => sum + (product.quantity * product.unitPrice),
+    0
+  );
+  if (Math.abs(calculatedTotal - orderData.totalAmount) > 0.01) { // Allow for small floating point differences
+    throw new Error(`Total amount mismatch. Calculated: ${calculatedTotal}, Provided: ${orderData.totalAmount}`);
+  }
 };
 
 const handleFirestoreError = (error: any) => {
@@ -176,6 +208,7 @@ interface OrderState {
     totalOrders: number;
     activeCustomers: number;
     revenue: number;
+    totalRevenue: number;
     outstanding: number;
     orderChange: number;
     customerChange: number;
@@ -184,6 +217,7 @@ interface OrderState {
   totalOrders: number;
   activeCustomers: number;
   revenue: number;
+  totalRevenue: number;
   outstanding: number;
   orderChange: number;
   customerChange: number;
@@ -201,8 +235,20 @@ const addOrderToFirebase = async (orderData: any) => {
     throw new Error('Firebase is not initialized');
   }
 
+  const { user } = useAuthStore.getState();
+  const { logActivity } = useActivityStore.getState();
+
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+
+  // Verify user has manager permissions
+  if (!user.role || (user.role !== 'manager' && user.role !== 'admin')) {
+    throw new Error('Insufficient permissions to create orders');
+  }
+
   try {
-    validateOrder(orderData);
+    await validateOrder(orderData);
     
     // Generate order number
     const orderNumber = await generateOrderNumber(getLastOrderNumber);
@@ -213,11 +259,31 @@ const addOrderToFirebase = async (orderData: any) => {
     const order = {
       ...orderData,
       orderNumber,
+      createdBy: user.id,
       createdAt: timestamp,
-      updatedAt: timestamp
+      updatedAt: timestamp,
+      status: orderData.status || 'pending'
     };
 
     const docRef = await addDoc(orderRef, order);
+
+    // Log activity
+    await logActivity({
+      type: 'order_created',
+      message: `New order created (#${orderNumber})`,
+      userId: user.id,
+      userName: user.name,
+      entityId: docRef.id,
+      entityType: 'order',
+      metadata: {
+        orderNumber,
+        customerId: orderData.customerId,
+        totalAmount: orderData.totalAmount,
+        productCount: orderData.products.length,
+        status: order.status
+      }
+    });
+
     return docRef.id;
   } catch (error) {
     const errorMessage = handleFirestoreError(error);
@@ -256,6 +322,102 @@ const updateOrderInFirebase = async (orderId: string, orderData: any) => {
   } catch (error: any) {
     console.error('Error updating order in Firestore:', error);
     throw new Error(handleFirestoreError(error));
+  }
+};
+
+// Rate limiting cache
+const rateLimitCache = new Map<string, { count: number; lastReset: number }>();
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+const MAX_REQUESTS = 50;
+
+const checkRateLimit = (operation: string): boolean => {
+  const now = Date.now();
+  const cacheKey = `orders_${operation}`;
+  
+  let limit = rateLimitCache.get(cacheKey);
+  
+  if (!limit || (now - limit.lastReset) > RATE_LIMIT_WINDOW) {
+    // Reset if it's been more than a minute
+    limit = { count: 0, lastReset: now };
+  }
+  
+  if (limit.count >= MAX_REQUESTS) {
+    return false;
+  }
+  
+  limit.count++;
+  rateLimitCache.set(cacheKey, limit);
+  return true;
+};
+
+const addOrder = async (orderData: any) => {
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 1000; // 1 second
+
+  const attemptAddOrder = async (attempt: number): Promise<string> => {
+    try {
+      if (!checkRateLimit('create')) {
+        throw new Error('Rate limit exceeded for order creation');
+      }
+
+      const notificationStore = useNotificationStore.getState();
+      const orderId = await addOrderToFirebase({
+        ...orderData,
+        createdAt: new Date(),
+      });
+      
+      notificationStore.sendNotification('New Order Created', {
+        body: `Order #${orderId} has been created successfully`,
+        tag: 'order-created',
+      });
+
+      return orderId;
+    } catch (error: any) {
+      if (error.message?.includes('Rate limit') && attempt < MAX_RETRIES) {
+        // Wait before retrying with exponential backoff
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * Math.pow(2, attempt - 1)));
+        return attemptAddOrder(attempt + 1);
+      }
+      throw error;
+    }
+  };
+
+  try {
+    return await attemptAddOrder(1);
+  } catch (error) {
+    console.error('Error adding order:', error);
+    throw error;
+  }
+};
+
+const updateOrder = async (orderId: string, orderData: any) => {
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY = 1000;
+
+  const attemptUpdate = async (attempt: number): Promise<void> => {
+    try {
+      if (!checkRateLimit('update')) {
+        throw new Error('Rate limit exceeded for order updates');
+      }
+
+      await updateOrderInFirebase(orderId, {
+        ...orderData,
+        updatedAt: new Date(),
+      });
+    } catch (error: any) {
+      if (error.message?.includes('Rate limit') && attempt < MAX_RETRIES) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * Math.pow(2, attempt - 1)));
+        return attemptUpdate(attempt + 1);
+      }
+      throw error;
+    }
+  };
+
+  try {
+    await attemptUpdate(1);
+  } catch (error) {
+    console.error('Error updating order:', error);
+    throw error;
   }
 };
 
@@ -387,10 +549,13 @@ export const useOrderStore = create<OrderState>(
 
     getOrderStats: (timeRange: string, customStartDate?: Date | null, customEndDate?: Date | null) => {
       const orders = get().orders;
+      const { payments = [] } = usePaymentStore.getState();
+      
       if (!orders.length) return {
         totalOrders: 0,
         activeCustomers: 0,
         revenue: 0,
+        totalRevenue: 0,
         outstanding: 0,
         orderChange: 0,
         customerChange: 0,
@@ -399,29 +564,52 @@ export const useOrderStore = create<OrderState>(
 
       const { startDate, endDate, previousStartDate, previousEndDate } = getDateRange(timeRange, customStartDate, customEndDate);
       
-      // Current period orders
+      // Current period orders and payments
       const currentPeriodOrders = orders.filter(order => {
         const orderDate = order.orderDate || order.createdAt;
         return orderDate >= startDate && orderDate <= endDate;
       });
 
-      // Previous period orders
+      const currentPeriodPayments = payments.filter(payment => {
+        const paymentDate = payment.date;
+        return paymentDate >= startDate && paymentDate <= endDate;
+      });
+
+      // Previous period orders and payments
       const previousPeriodOrders = orders.filter(order => {
         const orderDate = order.orderDate || order.createdAt;
         return orderDate >= previousStartDate && orderDate <= previousEndDate;
       });
 
+      const previousPeriodPayments = payments.filter(payment => {
+        const paymentDate = payment.date;
+        return paymentDate >= previousStartDate && paymentDate <= previousEndDate;
+      });
+
       // Calculate current period stats
-      const currentStats = calculatePeriodStats(currentPeriodOrders);
-      const previousStats = calculatePeriodStats(previousPeriodOrders);
+      const currentTotalRevenue = currentPeriodOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+      const currentPaidRevenue = currentPeriodPayments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+      const currentOutstanding = currentTotalRevenue - currentPaidRevenue;
+
+      // Calculate previous period stats for comparison
+      const previousTotalRevenue = previousPeriodOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+      const previousPaidRevenue = previousPeriodPayments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+
+      // Get unique customer IDs from current period
+      const activeCustomers = new Set(currentPeriodOrders.map(order => order.customerId)).size;
+      const previousActiveCustomers = new Set(previousPeriodOrders.map(order => order.customerId)).size;
 
       // Calculate changes
-      const orderChange = calculatePercentageChange(previousStats.totalOrders, currentStats.totalOrders);
-      const customerChange = calculatePercentageChange(previousStats.activeCustomers, currentStats.activeCustomers);
-      const revenueChange = calculatePercentageChange(previousStats.revenue, currentStats.revenue);
+      const orderChange = calculatePercentageChange(previousPeriodOrders.length, currentPeriodOrders.length);
+      const customerChange = calculatePercentageChange(previousActiveCustomers, activeCustomers);
+      const revenueChange = calculatePercentageChange(previousPaidRevenue, currentPaidRevenue);
 
       return {
-        ...currentStats,
+        totalOrders: currentPeriodOrders.length,
+        activeCustomers,
+        revenue: currentPaidRevenue,
+        totalRevenue: currentTotalRevenue,
+        outstanding: currentOutstanding,
         orderChange,
         customerChange,
         revenueChange
@@ -435,6 +623,7 @@ export const useOrderStore = create<OrderState>(
 
     getOrderTrends: (timeRange: string, customStartDate?: Date | null, customEndDate?: Date | null) => {
       const orders = get().orders;
+      const { payments = [] } = usePaymentStore.getState();
       const { startDate, endDate } = getDateRange(timeRange, customStartDate, customEndDate);
       
       // Filter orders within the date range
@@ -443,23 +632,51 @@ export const useOrderStore = create<OrderState>(
         return orderDate >= startDate && orderDate <= endDate;
       });
 
+      // Filter payments within the date range
+      const periodPayments = payments.filter(payment => {
+        const paymentDate = payment.date;
+        return paymentDate >= startDate && paymentDate <= endDate;
+      });
+
+      // Create a map of order IDs to their total paid amounts
+      const orderPayments = periodPayments.reduce((acc, payment) => {
+        if (!acc[payment.orderId]) {
+          acc[payment.orderId] = 0;
+        }
+        acc[payment.orderId] += payment.amount;
+        return acc;
+      }, {} as { [key: string]: number });
+
       // Group orders by date
       const ordersByDate = groupBy(periodOrders, order => 
         format(order.orderDate || order.createdAt, 'yyyy-MM-dd')
       );
 
+      // Group payments by date
+      const paymentsByDate = groupBy(periodPayments, payment => 
+        format(payment.date, 'yyyy-MM-dd')
+      );
+
+      // Get all unique dates
+      const allDates = new Set([
+        ...Object.keys(ordersByDate),
+        ...Object.keys(paymentsByDate)
+      ]);
+
       // Calculate daily stats
-      const dailyStats = Object.entries(ordersByDate).map(([date, orders]) => {
-        const revenue = orders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
-        const outstanding = orders.reduce((sum, order) => {
-          const totalPaid = order.paidAmount || 0;
-          return sum + ((order.totalAmount || 0) - totalPaid);
-        }, 0);
+      const dailyStats = Array.from(allDates).map(date => {
+        const dateOrders = ordersByDate[date] || [];
+        const datePayments = paymentsByDate[date] || [];
+
+        const totalRevenue = dateOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+        const paidRevenue = datePayments.reduce((sum, payment) => sum + payment.amount, 0);
+        const outstanding = totalRevenue - paidRevenue;
 
         return {
           date,
-          revenue,
-          outstanding
+          revenue: paidRevenue, // Show paid revenue by default
+          outstanding,
+          totalRevenue // Keep total revenue for reference
         };
       });
 
@@ -467,34 +684,9 @@ export const useOrderStore = create<OrderState>(
       return dailyStats.sort((a, b) => a.date.localeCompare(b.date));
     },
 
-    addOrder: async (orderData: any) => {
-      try {
-        const notificationStore = useNotificationStore.getState();
-        const orderId = await addOrderToFirebase(orderData);
-        
-        // Send notification for new order
-        notificationStore.sendNotification('New Order Created', {
-          body: `Order #${orderId} has been created successfully`,
-          tag: 'order-created',
-        });
+    addOrder,
 
-        return orderId;
-      } catch (error) {
-        console.error('Error adding order:', error);
-        throw error;
-      }
-    },
-
-    updateOrder: async (orderId: string, orderData: any) => {
-      try {
-        await updateOrderInFirebase(orderId, orderData);
-        return Promise.resolve();
-      } catch (error: any) {
-        const errorMessage = handleFirestoreError(error);
-        set({ error: errorMessage });
-        return Promise.reject(error);
-      }
-    },
+    updateOrder,
 
     updateOrderStatus: async (orderId: string, status: string) => {
       try {

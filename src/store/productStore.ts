@@ -100,6 +100,11 @@ export const useProductStore = create<ProductState>(
           throw new Error('User not authenticated');
         }
 
+        // Verify user has manager permissions
+        if (!user.role || (user.role !== 'manager' && user.role !== 'admin')) {
+          throw new Error('Insufficient permissions to add products');
+        }
+
         const docRef = await addDoc(collection(db, 'products'), {
           ...productData,
           costPrice: productData.costPrice || 0,  // Ensure costPrice is set
@@ -108,11 +113,14 @@ export const useProductStore = create<ProductState>(
           updatedAt: Timestamp.now()
         });
 
-        // Log activity
+        // Log activity with all required fields
         await logActivity({
           type: 'product_created',
-          description: `Product created: ${productData.name}`,
+          message: `Product ${productData.name} created`,
           userId: user.id,
+          userName: user.name,
+          entityId: docRef.id,
+          entityType: 'product',
           metadata: {
             name: productData.name,
             category: productData.category,
@@ -199,6 +207,13 @@ export const useProductStore = create<ProductState>(
 
         await deleteDoc(doc(db, 'products', id));
 
+        // Update local state immediately
+        set(state => ({
+          products: state.products.filter(p => p.id !== id),
+          loading: false,
+          error: null
+        }));
+
         // Log activity
         await logActivity({
           type: 'product_deleted',
@@ -216,8 +231,6 @@ export const useProductStore = create<ProductState>(
             }
           }
         });
-
-        set({ loading: false, error: null });
       } catch (error: any) {
         console.error('Error deleting product:', error);
         set({ error: error.message, loading: false });

@@ -2,6 +2,8 @@ import { collection, doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { createAdminUser } from './initializeAdmin';
 
+let initializationInProgress = false;
+
 export async function checkInitialization() {
   try {
     // First check system settings
@@ -30,8 +32,34 @@ export async function checkInitialization() {
 }
 
 export async function initializeSystem() {
+  if (initializationInProgress) {
+    console.log('Initialization already in progress');
+    return false;
+  }
+
   try {
-    // Create system settings first to enable permissions
+    initializationInProgress = true;
+
+    // Check if already initialized
+    const isInitialized = await checkInitialization();
+    if (isInitialized) {
+      console.log('System already initialized');
+      return true;
+    }
+
+    // Try to create admin user first
+    try {
+      await createAdminUser();
+    } catch (error) {
+      if (error?.code === 'auth/too-many-requests') {
+        console.log('Too many authentication attempts. Please try again later.');
+        return false;
+      }
+      // Other errors we can proceed with initialization
+      console.warn('Could not create admin user:', error);
+    }
+
+    // Create system settings
     await setDoc(doc(db, 'system', 'settings'), {
       initialized: false,
       createdAt: Timestamp.now(),
@@ -69,26 +97,19 @@ export async function initializeSystem() {
     console.log('System initialized successfully');
     return true;
   } catch (error: any) {
-    // Handle specific errors
-    if (error.code === 'auth/email-already-in-use') {
-      // Not a real error, just means admin exists
-      console.log('Admin user already exists, continuing initialization...');
-      return initializeSystem();
-    }
-
-    if (error.code === 'permission-denied') {
-      // If permission denied, try creating admin user first
-      await createAdminUser();
-      // Then retry initialization
-      return initializeSystem();
-    }
-
     console.error('Error initializing system:', error);
     return false;
+  } finally {
+    initializationInProgress = false;
   }
 }
 
 export async function initializeCollections() {
+  if (initializationInProgress) {
+    console.log('Initialization already in progress');
+    return false;
+  }
+
   try {
     const isInitialized = await checkInitialization();
     if (isInitialized) {
@@ -96,23 +117,9 @@ export async function initializeCollections() {
       return true;
     }
 
-    try {
-      // Create admin user first
-      await createAdminUser();
-    } catch (adminError: any) {
-      // If admin already exists, continue with system initialization
-      if (adminError.code === 'auth/email-already-in-use') {
-        console.log('Admin user already exists, continuing initialization...');
-      } else {
-        throw adminError;
-      }
-    }
-
-    // Then initialize system
-    await initializeSystem();
-    return true;
-  } catch (error: any) {
-    console.error('Error during collection initialization:', error);
-    throw error;
+    return await initializeSystem();
+  } catch (error) {
+    console.error('Error initializing collections:', error);
+    return false;
   }
 }

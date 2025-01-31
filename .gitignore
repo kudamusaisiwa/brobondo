@@ -24,35 +24,27 @@ dist-ssr
 *.sln
 *.sw?
 
-# Environment files
+# Environment variables
 .env
-.env.local
-.env.*.local
-.env.development
-.env.test
-.env.production
+.env.*
+!.env.example
 
 # Firebase
 .firebase/
-firebase-debug.log
-firestore-debug.log
-ui-debug.log
+firebase-debug.log*
+ui-debug.log*
+
+# Local Netlify folder
+.netlify
 
 # Build files
-/build
-/dist
+build/
+dist/
+out/
 
 # Cache
 .cache/
-.eslintcache
-.stylelintcache
+.temp/
 
-# Coverage directory
-/coverage
-
-# Misc
-*.pem
-.DS_Store
-Thumbs.db
-# Local Netlify folder
-.netlify
+# Testing
+coverage/

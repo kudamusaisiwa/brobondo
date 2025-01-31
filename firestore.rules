@@ -1,0 +1,107 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             getUserData().role == 'admin';
+    }
+
+    function isManager() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             (getUserData().role == 'manager' || getUserData().role == 'admin');
+    }
+
+    function isStaff() {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+             (getUserData().role in ['staff', 'manager', 'admin']);
+    }
+
+    function isValidCustomer(data) {
+      return data.keys().hasAll(['firstName', 'lastName', 'email', 'passportNumber']) &&
+             data.firstName is string && data.firstName.size() > 0 &&
+             data.lastName is string && data.lastName.size() > 0 &&
+             data.email is string && data.email.matches('^[^@]+@[^@]+\\.[^@]+$') &&
+             data.passportNumber is string && data.passportNumber.size() > 0;
+    }
+
+    // Rate limiting rules
+    function requestLimitNotExceeded() {
+      return request.time > resource.data.lastWrite + duration.value(1, 's');
+    }
+
+    // Customer collection rules
+    match /customers/{customerId} {
+      allow read: if true;
+      allow create, update: if isManager() && isValidCustomer(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Order collection rules
+    match /orders/{orderId} {
+      allow read: if isStaff() || 
+                 (resource != null && 
+                  exists(/databases/$(database)/documents/customers/$(resource.data.customerId)));
+      allow create: if isManager() && requestLimitNotExceeded();
+      allow update: if isManager() && requestLimitNotExceeded();
+      allow delete: if isAdmin();
+    }
+
+    // Customer Documents
+    match /customerDocuments/{documentId} {
+      allow read: if true;
+      allow write: if isManager();
+    }
+
+    // Communications
+    match /communications/{communicationId} {
+      allow read: if true;
+      allow write: if isManager();
+    }
+
+    // Payments
+    match /payments/{paymentId} {
+      allow read: if true;
+      allow write: if isManager();
+    }
+
+    // User management
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isManager());
+      allow write: if isManager();
+    }
+
+    // Product catalog
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isManager();
+    }
+
+    // Activity logs
+    match /activities/{activityId} {
+      allow read, write: if true;
+    }
+
+    // Invoices
+    match /invoices/{invoiceId} {
+      allow read: if true;
+      allow write: if isManager();
+    }
+
+    // Catch-all rule for admin access
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

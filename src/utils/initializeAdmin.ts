@@ -2,18 +2,45 @@ import { createUserWithEmailAndPassword, getAuth, signInWithEmailAndPassword } f
 import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
+let initializationInProgress = false;
+let lastAttemptTime = 0;
+const RETRY_DELAY = 60000; // 1 minute delay between attempts
+
 export async function createAdminUser() {
-  const auth = getAuth();
-  const email = 'kudamusasiwa@gmail.com';
-  const password = '1234Abcd!';
+  const now = Date.now();
+  if (now - lastAttemptTime < RETRY_DELAY) {
+    console.log('Please wait before trying again');
+    throw new Error('Please wait before trying again');
+  }
+
+  if (initializationInProgress) {
+    console.log('Admin initialization already in progress');
+    throw new Error('Admin initialization already in progress');
+  }
+
+  initializationInProgress = true;
+  lastAttemptTime = now;
 
   try {
-    // First try to sign in with existing credentials
+    // Check if admin document exists first
+    const adminQuery = doc(db, 'users', 'admin');
+    const adminDoc = await getDoc(adminQuery);
+
+    if (adminDoc.exists()) {
+      console.log('Admin user document exists');
+      return;
+    }
+
+    const auth = getAuth();
+    const email = 'kudamusasiwa@gmail.com';
+    const password = '1234Abcd!';
+
     try {
+      // Try to sign in first
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       console.log('Admin user exists, signed in successfully');
       
-      // Update or create admin user document
+      // Update admin user document
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         email,
         name: 'Kuda Musasiwa',
@@ -22,47 +49,40 @@ export async function createAdminUser() {
         active: true,
         lastLogin: Timestamp.now(),
         updatedAt: Timestamp.now()
-      }, { merge: true }); // Use merge to preserve existing data
+      }, { merge: true });
       
-      return;
     } catch (signInError: any) {
-      // Only proceed with creation if the error is user-not-found
-      if (signInError.code !== 'auth/user-not-found') {
-        console.log('Admin user exists but sign-in failed:', signInError.message);
-        return;
+      if (signInError.code === 'auth/too-many-requests') {
+        console.log('Too many sign-in attempts. Please try again later.');
+        throw signInError;
+      }
+
+      if (signInError.code === 'auth/user-not-found') {
+        // Create new admin user
+        console.log('Creating new admin user...');
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+
+        // Create user document
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+          email,
+          name: 'Kuda Musasiwa',
+          phone: '+263712311634',
+          role: 'admin',
+          active: true,
+          lastLogin: null,
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now()
+        });
+
+        console.log('Admin user created successfully');
+      } else {
+        throw signInError;
       }
     }
-
-    // If we get here, the user doesn't exist, so create new admin user
-    console.log('Creating new admin user...');
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-
-    // Create user document
-    await setDoc(doc(db, 'users', userCredential.user.uid), {
-      email,
-      name: 'Kuda Musasiwa',
-      phone: '+263712311634',
-      role: 'admin',
-      active: true,
-      lastLogin: null,
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    });
-
-    console.log('Admin user created successfully');
   } catch (error: any) {
-    // Handle specific errors
-    if (error.code === 'auth/email-already-in-use') {
-      console.log('Admin user already exists');
-      return; // Not a real error, just means user exists
-    }
-    
-    // Ignore permission errors during initial setup
-    if (error.code === 'permission-denied') {
-      return;
-    }
-
-    console.error('Error creating admin user:', error);
+    console.error('Error creating/updating admin user:', error.message);
     throw error;
+  } finally {
+    initializationInProgress = false;
   }
 }

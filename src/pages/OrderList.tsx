@@ -1,18 +1,34 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useOrderStore } from '../store/orderStore';
 import { useCustomerStore } from '../store/customerStore';
 import { format } from 'date-fns';
-import { EyeIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { EyeIcon, PencilIcon, TrashIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
 import QuickStatusChange from '../components/orders/QuickStatusChange';
 import { Link } from 'react-router-dom';
 import { Customer } from '../types';
+import SendInvoiceModal from '../components/modals/SendInvoiceModal';
+import { toast } from 'react-hot-toast';
 
 export default function OrderList() {
   const { orders } = useOrderStore();
   const { getCustomerById } = useCustomerStore();
+  const [selectedOrder, setSelectedOrder] = useState<{ order: any; customer: Customer } | null>(null);
 
   const getCustomerDetails = (customerId: string): Customer | null => {
     return getCustomerById(customerId);
+  };
+
+  const handleSendClick = (order: any) => {
+    const customer = getCustomerDetails(order.customerId);
+    if (!customer) {
+      toast.error('Customer information not found');
+      return;
+    }
+    if (!customer.phone) {
+      toast.error('Customer phone number not found');
+      return;
+    }
+    setSelectedOrder({ order, customer });
   };
 
   return (
@@ -21,7 +37,7 @@ export default function OrderList() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Orders</h1>
         <Link
           to="/orders/new"
-          className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+          className="btn-primary"
         >
           New Order
         </Link>
@@ -86,6 +102,13 @@ export default function OrderList() {
                       <PencilIcon className="h-5 w-5" />
                     </Link>
                     <button
+                      onClick={() => handleSendClick(order)}
+                      className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
+                      title="Send Invoice"
+                    >
+                      <PaperAirplaneIcon className="h-5 w-5" />
+                    </button>
+                    <button
                       onClick={() => {/* Add delete handler */}}
                       className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                       title="Delete Order"
@@ -99,6 +122,16 @@ export default function OrderList() {
           })}
         </div>
       </div>
+
+      {/* Send Invoice Modal */}
+      {selectedOrder && (
+        <SendInvoiceModal
+          isOpen={true}
+          onClose={() => setSelectedOrder(null)}
+          order={selectedOrder.order}
+          customer={selectedOrder.customer}
+        />
+      )}
     </div>
   );
 }

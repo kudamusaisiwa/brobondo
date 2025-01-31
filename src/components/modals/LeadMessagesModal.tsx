@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { X, MessageCircle } from 'lucide-react';
-import { manychatApi } from '../../services/manychat';
+import React from 'react';
+import { X } from 'lucide-react';
 import { Lead } from '../../types';
-import Spinner from '../ui/Spinner';
+import { MessageHistory } from '../messages/MessageHistory';
+import { MessageBadge } from '../messages/MessageBadge';
+import { MessageComposer } from '../messages/MessageComposer';
+import { useMessageStore } from '../../store/messageStore';
 
 interface LeadMessagesModalProps {
   isOpen: boolean;
@@ -15,115 +17,43 @@ const LeadMessagesModal: React.FC<LeadMessagesModalProps> = ({
   onClose, 
   lead 
 }) => {
-  const [messages, setMessages] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchMessages = async () => {
-      if (!isOpen || !lead.manyChatId) return;
-
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Log the attempt to fetch messages
-        console.log('Attempting to fetch messages for lead:', {
-          leadId: lead.id,
-          manyChatId: lead.manyChatId,
-          phoneNumber: lead.phoneNumber
-        });
-
-        const fetchedMessages = await manychatApi.getContactMessages(lead.manyChatId);
-        
-        // Log successful message retrieval
-        console.log('Messages retrieved successfully:', fetchedMessages.length);
-        
-        setMessages(fetchedMessages);
-      } catch (err) {
-        console.error('Error fetching messages:', err);
-        
-        // More detailed error handling
-        setError(
-          err instanceof Error 
-            ? `Failed to fetch messages: ${err.message}. 
-               This could be due to API limitations, invalid contact ID, 
-               or the contact not having any messages.
-               Please check the contact's details in ManyContacts.` 
-            : 'Failed to fetch messages'
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchMessages();
-  }, [isOpen, lead.manyChatId]);
+  // Initialize message store if needed
+  React.useEffect(() => {
+    if (isOpen && lead.manyContactId) {
+      useMessageStore.getState().initialize();
+    }
+  }, [isOpen, lead.manyContactId]);
 
   if (!isOpen) return null;
 
-  const formatTimestamp = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString();
-  };
-
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex min-h-screen items-center justify-center p-4">
-        <div 
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-          onClick={onClose}
-        ></div>
-
-        <div className="relative w-full max-w-2xl transform overflow-hidden rounded-lg bg-white p-6 shadow-xl transition-all">
-          <div className="absolute right-4 top-4">
-            <button 
-              onClick={onClose} 
-              className="text-gray-400 hover:text-gray-500"
-            >
-              <X className="h-6 w-6" />
-            </button>
+    <div className={`fixed inset-0 bg-black bg-opacity-50 z-50 ${isOpen ? 'flex' : 'hidden'} items-center justify-center p-4`}>
+      <div className="bg-white rounded-lg w-full max-w-2xl h-[80vh] flex flex-col">
+        <div className="flex justify-between items-center p-4 border-b">
+          <div className="flex items-center space-x-2">
+            <h2 className="text-lg font-semibold">Chat with {lead.name}</h2>
+            {lead.manyContactId && <MessageBadge contactId={lead.manyContactId} />}
           </div>
-
-          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center">
-            <MessageCircle className="mr-2 h-6 w-6" />
-            Messages for {lead.name}
-          </h2>
-
-          {loading && (
-            <div className="flex justify-center items-center h-64">
-              <Spinner />
-            </div>
-          )}
-
-          {error && (
-            <div className="text-red-500 text-center p-4">
-              {error}
-            </div>
-          )}
-
-          {!loading && !error && messages.length === 0 && (
-            <div className="text-gray-500 text-center p-4">
-              No messages found for this lead.
-            </div>
-          )}
-
-          {!loading && messages.length > 0 && (
-            <div className="max-h-[500px] overflow-y-auto">
-              {messages.map((message) => (
-                <div 
-                  key={message.id} 
-                  className={`p-3 my-2 rounded-lg ${
-                    message.direction === 'incoming' 
-                      ? 'bg-blue-100 text-blue-800 self-start' 
-                      : 'bg-green-100 text-green-800 self-end text-right'
-                  }`}
-                >
-                  <p className="text-sm">{message.text}</p>
-                  <small className="text-xs text-gray-500">
-                    {formatTimestamp(message.timestamp)}
-                  </small>
-                </div>
-              ))}
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="flex-1 overflow-hidden">
+          {lead.manyContactId ? (
+            <>
+              <MessageHistory 
+                contactId={lead.manyContactId} 
+                contactName={lead.name} 
+              />
+              <MessageComposer 
+                contactId={lead.manyContactId}
+                disabled={!lead.manyContactId} 
+              />
+            </>
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              No ManyContact ID found for this lead. They may not have messaged through ManyContact yet.
             </div>
           )}
         </div>

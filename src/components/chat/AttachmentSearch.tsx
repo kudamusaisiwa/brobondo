@@ -52,12 +52,12 @@ export default function AttachmentSearch({ onSelect, onClose }: AttachmentSearch
     // Search orders
     orders.forEach(order => {
       const customer = getCustomerById(order.customerId);
-      const searchText = `order ${order.id} ${customer?.firstName || ''} ${customer?.lastName || ''}`.toLowerCase();
+      const searchText = `order ${order.orderNumber} ${customer?.firstName || ''} ${customer?.lastName || ''}`.toLowerCase();
       if (searchText.includes(term)) {
         results.push({
           type: 'order',
           id: order.id,
-          title: `Order #${order.id}`,
+          title: `Order #${order.orderNumber}`,
           subtitle: customer ? `${customer.firstName} ${customer.lastName}` : undefined,
           amount: order.totalAmount,
           searchText,
@@ -68,12 +68,13 @@ export default function AttachmentSearch({ onSelect, onClose }: AttachmentSearch
 
     // Search payments
     payments.forEach(payment => {
-      const searchText = `payment ${payment.id}`.toLowerCase();
+      const order = orders.find(o => o.id === payment.orderId);
+      const searchText = `payment ${payment.id} ${order?.orderNumber || ''}`.toLowerCase();
       if (searchText.includes(term)) {
         results.push({
           type: 'payment',
           id: payment.id,
-          title: `Payment for Order #${payment.orderId}`,
+          title: `Payment for Order #${order?.orderNumber || payment.orderId}`,
           amount: payment.amount,
           searchText,
           icon: CreditCard

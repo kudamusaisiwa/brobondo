@@ -8,7 +8,8 @@ import {
   Timestamp,
   where,
   getDocs,
-  limit
+  limit,
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { createProtectedStore } from './baseStore';
@@ -21,7 +22,7 @@ interface ActivityState {
   loading: boolean;
   error: string | null;
   initialize: () => (() => void);
-  logActivity: (activity: Omit<Activity, 'id' | 'createdAt'>) => Promise<string>;
+  logActivity: (activity: Partial<Activity>) => Promise<string>;
   getActivities: (filters?: {
     type?: ActivityType[];
     entityType?: 'customer' | 'order' | 'payment' | 'task' | 'user' | 'communication';
@@ -77,6 +78,10 @@ export const useActivityStore = create<ActivityState>(
       try {
         set({ loading: true });
 
+        // Get credentials from session storage if available
+        const credentialsString = sessionStorage.getItem('customerPortalCredentials');
+        const queryOptions = credentialsString ? JSON.parse(credentialsString) : undefined;
+
         // Validate required fields
         if (!activity.userId || !activity.userName || !activity.type || !activity.message) {
           throw new Error('Missing required activity fields');
@@ -90,12 +95,15 @@ export const useActivityStore = create<ActivityState>(
               .map(([key, value]) => [key, value === null ? null : value])
           ) : null;
 
-        // Add activity to Firestore
-        const docRef = await addDoc(collection(db, 'activities'), {
+        const activityRef = collection(db, 'activities');
+        const activityData = {
           ...activity,
           metadata: cleanMetadata,
-          createdAt: Timestamp.now()
-        });
+          createdAt: serverTimestamp(),
+          timestamp: new Date().toISOString()
+        };
+
+        const docRef = await addDoc(activityRef, activityData, queryOptions);
 
         // Play sound for activity creation
         playPositiveSound();

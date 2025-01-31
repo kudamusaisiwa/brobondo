@@ -1,17 +1,25 @@
 import React, { useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { BarChart3, Table } from 'lucide-react';
 import type { Expense } from '../../types';
 
 interface ExpenseChartProps {
   expenses: Expense[];
+  startDate: Date;
+  endDate: Date;
 }
 
-export default function ExpenseChart({ expenses }: ExpenseChartProps) {
+export default function ExpenseChart({ expenses, startDate, endDate }: ExpenseChartProps) {
   const [viewMode, setViewMode] = useState<'chart' | 'table'>('chart');
 
+  // Filter expenses based on date range
+  const filteredExpenses = expenses.filter(expense => {
+    const expenseDate = expense.date instanceof Date ? expense.date : new Date(expense.date);
+    return expenseDate >= startDate && expenseDate <= endDate;
+  });
+
   // Group expenses by category with proper type checking
-  const expensesByCategory = expenses.reduce((acc, expense) => {
+  const expensesByCategory = filteredExpenses.reduce((acc, expense) => {
     if (!expense?.category || !expense?.amount) return acc;
     
     const category = expense.category;
@@ -45,32 +53,32 @@ export default function ExpenseChart({ expenses }: ExpenseChartProps) {
 
   // Vibrant color palette for categories
   const categoryColors = {
-    'office_supplies': '#FF4D4D',    // Bright Red
+    'office_supplies': '#FF6B6B',    // Bright Red
     'utilities': '#4ECDC4',          // Vibrant Turquoise
-    'rent': '#3498DB',               // Bright Blue
-    'salaries': '#2ECC71',           // Vivid Green
-    'marketing': '#F39C12',          // Bright Orange
-    'equipment': '#E74C3C',          // Saturated Red
-    'software': '#9B59B6',           // Vibrant Purple
-    'hardware': '#F1C40F',           // Bright Yellow
-    'travel': '#1ABC9C',             // Bright Cyan
-    'consulting': '#E91E63',         // Bright Pink
-    'legal': '#673AB7',              // Deep Purple
-    'banking': '#00BCD4',            // Bright Cyan Blue
-    'food': '#FF5722',               // Vivid Orange
-    'director_withdrawal': '#2196F3', // Bright Blue
-    'transport': '#9C27B0',          // Vibrant Purple
-    'salary_advance': '#FF9800',     // Bright Orange
-    'other': '#795548',              // Rich Brown
+    'rent': '#45B7D1',               // Bright Blue
+    'salaries': '#4ADE80',           // Vivid Green
+    'marketing': '#FFA600',          // Bright Orange
+    'equipment': '#FF4D4D',          // Saturated Red
+    'software': '#A78BFA',           // Vibrant Purple
+    'hardware': '#FFD93D',           // Bright Yellow
+    'travel': '#06B6D4',             // Bright Cyan
+    'consulting': '#F472B6',         // Bright Pink
+    'legal': '#9333EA',              // Deep Purple
+    'banking': '#22D3EE',            // Bright Cyan Blue
+    'food': '#FF8C42',               // Vivid Orange
+    'director_withdrawal': '#60A5FA', // Bright Blue
+    'transport': '#C084FC',          // Vibrant Purple
+    'salary_advance': '#FB923C',     // Bright Orange
+    'other': '#94A3B8',              // Rich Gray
   };
 
   // Get color for category
   const getVibrantColor = (category: string) => {
     const cleanCategory = category.toLowerCase().replace(/\s+/g, '_');
-    return categoryColors[cleanCategory] || `hsl(${Math.random() * 360}, 70%, 50%)`;
+    return categoryColors[cleanCategory] || `#${Math.floor(Math.random()*16777215).toString(16)}`;
   };
 
-  if (!expenses.length) {
+  if (!filteredExpenses.length) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 text-center">
         <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
@@ -114,38 +122,49 @@ export default function ExpenseChart({ expenses }: ExpenseChartProps) {
       </div>
 
       {viewMode === 'chart' ? (
-        <div className="h-[400px]">
+        <div className="h-96">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} layout="vertical" margin={{ left: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+            <BarChart data={chartData}>
+              <CartesianGrid 
+                strokeDasharray="3 3" 
+                className="stroke-gray-200 dark:stroke-gray-700" 
+              />
               <XAxis 
-                type="number" 
-                tickFormatter={(value) => `$${value.toLocaleString()}`} 
+                dataKey="category" 
+                className="text-gray-600 dark:text-gray-300"
+                tick={{ fill: 'currentColor' }}
+                angle={-45}
+                textAnchor="end"
+                height={80}
               />
               <YAxis 
-                type="category" 
-                dataKey="category" 
-                width={120}
-                tickFormatter={(value) => value.split(' ').map(word => 
-                  word.charAt(0).toUpperCase() + word.slice(1)
-                ).join(' ')}
+                className="text-gray-600 dark:text-gray-300"
+                tick={{ fill: 'currentColor' }}
+                tickFormatter={(value) => `$${value.toLocaleString()}`}
               />
               <Tooltip 
-                formatter={(value: number) => [`$${value.toLocaleString(undefined, {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2
-                })}`, 'Amount']}
-                contentStyle={{
-                  backgroundColor: 'var(--color-surface-50)',
-                  border: '1px solid var(--color-surface-200)',
-                  borderRadius: '0.5rem'
+                contentStyle={{ 
+                  backgroundColor: 'rgb(31, 41, 55)', 
+                  border: 'none',
+                  borderRadius: '0.375rem',
+                  color: 'white'
                 }}
+                itemStyle={{ color: 'white' }}
+                cursor={{ fill: 'rgba(255, 255, 255, 0.1)' }}
+                formatter={(value: number) => [`$${value.toLocaleString()}`, 'Amount']}
               />
               <Bar 
                 dataKey="amount" 
-                radius={[0, 4, 4, 0]}
-                fill={(entry) => getVibrantColor(entry.category)}
-              />
+                radius={[4, 4, 0, 0]}
+              >
+                {chartData.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`}
+                    fill={getVibrantColor(entry.category)}
+                    className="opacity-90 hover:opacity-100"
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>

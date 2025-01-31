@@ -27,6 +27,7 @@ export default function Customers() {
   const [showToast, setShowToast] = useState(false);
   const [showSendMessageModal, setShowSendMessageModal] = useState(false);
   const [selectedCustomerForMessage, setSelectedCustomerForMessage] = useState<Customer | null>(null);
+  const [sendingMessageToCustomerId, setSendingMessageToCustomerId] = useState<string | null>(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -58,7 +59,14 @@ export default function Customers() {
   }, [initialize]);
 
   const filteredCustomers = customers.filter(customer => {
-    if (!customer || !searchTerm) return true;
+    // Filter out customers with no identifying information
+    if (!customer || 
+        (!customer.firstName && !customer.lastName && !customer.email && !customer.companyName)) {
+      return false;
+    }
+    
+    // If there's no search term, show all valid customers
+    if (!searchTerm) return true;
     
     const searchStr = searchTerm.toLowerCase();
     const fullName = `${customer.firstName || ''} ${customer.lastName || ''}`.toLowerCase();
@@ -160,6 +168,12 @@ export default function Customers() {
     setShowSendMessageModal(true);
   };
 
+  const handleMessageSent = () => {
+    setShowSendMessageModal(false);
+    setSelectedCustomerForMessage(null);
+    setSendingMessageToCustomerId(null);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -191,11 +205,10 @@ export default function Customers() {
           </button>
           <button
             onClick={() => setShowAddModal(true)}
-            className="inline-flex items-center rounded-md bg-blue-600 px-2 sm:px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500"
-            title="Add Customer"
+            className="btn-primary inline-flex items-center"
           >
-            <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline sm:ml-2">Add Customer</span>
+            <Plus className="h-5 w-5 mr-2" />
+            Add Customer
           </button>
         </div>
       </div>
@@ -219,6 +232,7 @@ export default function Customers() {
         onEditClick={handleEditCustomerClick}
         onDeleteClick={handleDeleteCustomerClick}
         onSendMessageClick={handleSendMessageClick}
+        sendingMessageToCustomerId={sendingMessageToCustomerId}
       />
 
       <Pagination
@@ -267,8 +281,18 @@ export default function Customers() {
 
       <SendCustomerMessageModal
         isOpen={showSendMessageModal}
-        onClose={() => setShowSendMessageModal(false)}
+        onClose={() => {
+          setShowSendMessageModal(false);
+          setSelectedCustomerForMessage(null);
+          setSendingMessageToCustomerId(null);
+        }}
         customer={selectedCustomerForMessage!}
+        onMessageSent={handleMessageSent}
+        onMessageSending={(sending) => {
+          if (selectedCustomerForMessage) {
+            setSendingMessageToCustomerId(sending ? selectedCustomerForMessage.id : null);
+          }
+        }}
       />
 
       {showToast && (

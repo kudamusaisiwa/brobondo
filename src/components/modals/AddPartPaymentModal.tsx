@@ -102,7 +102,7 @@ export default function AddPartPaymentModal({
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+                className="btn-primary"
               >
                 Add Payment
               </button>

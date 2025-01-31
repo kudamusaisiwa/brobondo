@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { PDFDownloadLink, PDFViewer } from '@react-pdf/renderer';
-import { Download, Eye, X } from 'lucide-react';
+import { Download, Eye, X, Send } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import InvoicePDF from '../pdf/InvoicePDF';
 import OrderStatusBadge from './OrderStatusBadge';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useCustomerStore } from '../../store/customerStore';
+import SendInvoiceModal from '../modals/SendInvoiceModal';
 import type { Order, OrderStatus, PaymentMethod } from '../../types';
 
 interface InvoiceViewProps {
@@ -25,6 +27,7 @@ export default function InvoiceView({
   showStatusChange = false 
 }: InvoiceViewProps) {
   const [showPreview, setShowPreview] = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
   const { getCustomerById } = useCustomerStore();
   const customer = order ? getCustomerById(order.customerId) : null;
 
@@ -67,6 +70,18 @@ export default function InvoiceView({
     );
   };
 
+  const handleSendClick = () => {
+    if (!customer) {
+      toast.error('Customer information not found');
+      return;
+    }
+    if (!customer.phone) {
+      toast.error('Customer phone number not found');
+      return;
+    }
+    setShowSendModal(true);
+  };
+
   return (
     <div className="space-y-6">
       {/* Actions Bar */}
@@ -98,6 +113,13 @@ export default function InvoiceView({
                 </>
               )}
             </PDFDownloadLink>
+            <button
+              onClick={handleSendClick}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:border-gray-600"
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Send via WhatsApp
+            </button>
           </div>
         </div>
       </div>
@@ -165,6 +187,16 @@ export default function InvoiceView({
 
       {/* Preview Modal */}
       <PreviewModal />
+
+      {/* Send Invoice Modal */}
+      {showSendModal && customer && (
+        <SendInvoiceModal
+          isOpen={showSendModal}
+          onClose={() => setShowSendModal(false)}
+          order={order}
+          customer={customer}
+        />
+      )}
     </div>
   );
 }

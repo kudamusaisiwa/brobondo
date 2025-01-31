@@ -17,7 +17,9 @@ import {
   MessageSquare,
   CheckSquare,
   DollarSign,
-  UserCog
+  UserCog,
+  FileText,
+  ExternalLink
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { usePermissions } from '../hooks/usePermissions';
@@ -36,15 +38,19 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
     { name: 'Dashboard', icon: LayoutDashboard, href: '/' },
     { name: 'My Tasks', icon: CheckSquare, href: '/tasks' },
     { name: 'Customers', icon: Users, href: '/customers' },
-    { name: 'Leads', icon: UserCog, href: '/leads' },
     { name: 'Create Order', icon: PlusCircle, href: '/orders' },
     { name: 'All Orders', icon: ClipboardList, href: '/orders/all' },
     { name: 'Payments', icon: CreditCard, href: '/payments', show: canManagePayments },
     { name: 'Products', icon: Package, href: '/products' },
     { name: 'Activities', icon: Activity, href: '/activities' },
-    { name: 'Deliveries', icon: Truck, href: '/deliveries' },
     { name: 'Chat', icon: MessageSquare, href: '/chat' },
     { name: 'Expenses', icon: DollarSign, href: '/expenses', show: canManagePayments },
+    { 
+      name: 'Signed Forms', 
+      icon: FileText, 
+      href: 'https://www.jotform.com/tables/240603373079556',
+      external: true 
+    },
     { name: 'Users', icon: UserPlus, href: '/users', show: isAdmin },
     { name: 'Reports', icon: BarChart3, href: '/reports', show: isAdmin },
     { name: 'Help', icon: HelpCircle, href: '/help' }
@@ -77,28 +83,39 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           </div>
 
           <nav className="flex-1 space-y-1 px-2 py-4">
-            {navigation.map((item) => {
-              if (item.show === false) return null;
-
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.name}
-                  to={item.href}
-                  onClick={() => onClose()}
-                  className={({ isActive }) =>
-                    `group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
-                      isActive
-                        ? 'bg-primary-50 dark:bg-primary-900/50 text-primary-600 dark:text-primary-400'
-                        : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
-                    }`
-                  }
-                >
-                  <Icon className="mr-3 h-5 w-5 flex-shrink-0" />
-                  {item.name}
-                </NavLink>
-              );
-            })}
+            {navigation
+              .filter(item => item.show !== false)
+              .map(item => (
+                <div key={item.name}>
+                  {item.external ? (
+                    <a
+                      href={item.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center px-2 py-2 text-sm font-medium rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white group"
+                    >
+                      <item.icon className="h-5 w-5 mr-3" />
+                      <span>{item.name}</span>
+                      <ExternalLink className="h-4 w-4 ml-auto opacity-0 group-hover:opacity-100" />
+                    </a>
+                  ) : (
+                    <NavLink
+                      to={item.href}
+                      onClick={() => onClose()}
+                      className={({ isActive }) =>
+                        `group flex items-center px-2 py-2 text-sm font-medium rounded-md ${
+                          isActive
+                            ? 'bg-primary-50 dark:bg-primary-900/50 text-primary-600 dark:text-primary-400'
+                            : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white'
+                        }`
+                      }
+                    >
+                      <item.icon className="h-5 w-5 mr-3" />
+                      <span>{item.name}</span>
+                    </NavLink>
+                  )}
+                </div>
+              ))}
           </nav>
           
           <div className="border-t border-gray-200 dark:border-gray-700 p-4">

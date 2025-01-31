@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
 import { Calendar, DollarSign, CreditCard, FileText, Edit2, Trash2, AlertTriangle, X } from 'lucide-react';
 import type { Expense } from '../../types';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 
 interface ExpenseListProps {
   expenses: Expense[];
   onEditClick: (expense: Expense) => void;
   onDeleteClick: (id: string) => Promise<void>;
+  timeRange: 'daily' | 'weekly' | 'monthly' | 'custom';
+  startDate: Date;
+  endDate: Date;
+  onTimeRangeChange: (range: 'daily' | 'weekly' | 'monthly' | 'custom') => void;
+  onDateRangeChange: (start: Date | null, end: Date | null) => void;
 }
 
 interface DeleteConfirmationModalProps {
@@ -64,9 +71,25 @@ function DeleteConfirmationModal({ isOpen, onClose, onConfirm, expenseDescriptio
   );
 }
 
-export default function ExpenseList({ expenses, onEditClick, onDeleteClick }: ExpenseListProps) {
+export default function ExpenseList({ 
+  expenses, 
+  onEditClick, 
+  onDeleteClick,
+  timeRange,
+  startDate,
+  endDate,
+  onTimeRangeChange,
+  onDateRangeChange
+}: ExpenseListProps) {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+
+  // Filter expenses based on date range
+  const filteredExpenses = expenses.filter(expense => {
+    const expenseDate = expense.date instanceof Date ? expense.date : new Date(expense.date);
+    return expenseDate >= startDate && expenseDate <= endDate;
+  });
 
   const handleDeleteClick = (expense: Expense) => {
     setSelectedExpense(expense);
@@ -127,59 +150,111 @@ export default function ExpenseList({ expenses, onEditClick, onDeleteClick }: Ex
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-      <div className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-        {expenses.map((expense) => (
-          <div key={expense.id} className="p-4 sm:p-6 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-            <div className="flex items-center justify-between">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                    {expense.description}
-                  </p>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => onEditClick(expense)}
-                      className="p-1 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-                      title="Edit expense"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteClick(expense)}
-                      className="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400"
-                      title="Delete expense"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                    <Calendar className="flex-shrink-0 mr-1.5 h-4 w-4" />
-                    {new Date(expense.date).toLocaleDateString()}
-                  </div>
-                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                    <DollarSign className="flex-shrink-0 mr-1.5 h-4 w-4" />
-                    {expense.amount.toFixed(2)}
-                  </div>
-                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                    <CreditCard className="flex-shrink-0 mr-1.5 h-4 w-4" />
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(expense.category)}`}>
-                      {expense.category.replace('_', ' ')}
-                    </span>
-                  </div>
-                  {expense.reference && (
-                    <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                      <FileText className="flex-shrink-0 mr-1.5 h-4 w-4" />
-                      {expense.reference}
-                    </div>
-                  )}
-                </div>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+      <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex justify-between items-center">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Expenses
+          </h2>
+          <div className="flex items-center space-x-4">
+            <select
+              value={timeRange}
+              onChange={(e) => {
+                const value = e.target.value as typeof timeRange;
+                onTimeRangeChange(value);
+                if (value === 'custom') {
+                  setShowDatePicker(true);
+                } else {
+                  setShowDatePicker(false);
+                }
+              }}
+              className="rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-1.5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+            >
+              <option value="daily">Today</option>
+              <option value="weekly">This Week</option>
+              <option value="monthly">This Month</option>
+              <option value="custom">Customer Range</option>
+            </select>
+            {showDatePicker && (
+              <div className="absolute mt-10 right-0 z-10">
+                <DatePicker
+                  selectsRange={true}
+                  startDate={startDate}
+                  endDate={endDate}
+                  onChange={(update: [Date | null, Date | null]) => onDateRangeChange(update[0], update[1])}
+                  isClearable={true}
+                  inline
+                />
               </div>
-            </div>
+            )}
           </div>
-        ))}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          <thead className="bg-gray-50 dark:bg-gray-700">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase tracking-wider">
+                Description
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase tracking-wider">
+                Date
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase tracking-wider">
+                Amount
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase tracking-wider">
+                Category
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase tracking-wider">
+                Reference
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-200 uppercase tracking-wider">
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+            {filteredExpenses.map((expense) => (
+              <tr key={expense.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                  {expense.description}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                  {new Date(expense.date).toLocaleDateString()}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                  {expense.amount.toFixed(2)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(expense.category)}`}>
+                    {expense.category.replace('_', ' ')}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                  {expense.reference}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                  <button
+                    onClick={() => onEditClick(expense)}
+                    className="p-1 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+                    title="Edit expense"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteClick(expense)}
+                    className="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400"
+                    title="Delete expense"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <DeleteConfirmationModal

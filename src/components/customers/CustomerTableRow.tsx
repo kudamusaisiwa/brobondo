@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Mail, Phone, Edit, Trash2, MessageSquare } from 'lucide-react';
+import { Mail, Phone, Edit, Trash2, MessageSquare, Loader2 } from 'lucide-react';
 import type { Customer } from '../../types';
 
 interface CustomerTableRowProps {
@@ -9,6 +9,7 @@ interface CustomerTableRowProps {
   onEditClick: (customer: Customer) => void;
   onDeleteClick: (customer: Customer) => void;
   onSendMessageClick: (customer: Customer) => void;
+  isSendingMessage?: boolean;
 }
 
 export default function CustomerTableRow({
@@ -16,7 +17,8 @@ export default function CustomerTableRow({
   canManageCustomers,
   onEditClick,
   onDeleteClick,
-  onSendMessageClick
+  onSendMessageClick,
+  isSendingMessage
 }: CustomerTableRowProps) {
   return (
     <tr className="hover:bg-gray-50 dark:hover:bg-gray-700">
@@ -61,7 +63,7 @@ export default function CustomerTableRow({
             <>
               <button 
                 onClick={() => onEditClick(customer)}
-                className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                className="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300"
                 title="Edit Customer"
               >
                 <Edit className="h-5 w-5" />
@@ -75,15 +77,29 @@ export default function CustomerTableRow({
               </button>
             </>
           )}
-          {customer.phone && (
-            <button 
-              onClick={() => onSendMessageClick(customer)}
-              className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
-              title="Send Message"
-            >
+          <button 
+            onClick={() => !isSendingMessage && customer.phone && onSendMessageClick(customer)}
+            className={`relative group ${
+              customer.phone 
+                ? 'text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300' 
+                : 'text-gray-400 cursor-not-allowed'
+            }`}
+            disabled={!customer.phone || isSendingMessage}
+            title={customer.phone ? 'Send Message' : 'No phone number available'}
+          >
+            {isSendingMessage ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
               <MessageSquare className="h-5 w-5" />
-            </button>
-          )}
+            )}
+            
+            {/* Tooltip */}
+            {!customer.phone && (
+              <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-800 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                No phone number available
+              </div>
+            )}
+          </button>
         </div>
       </td>
     </tr>

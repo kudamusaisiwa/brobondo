@@ -111,8 +111,7 @@ export const useCustomerStore = create<CustomerState>(
 
           // Calculate total orders and revenue
           const customerOrders = useOrderStore.getState().orders.filter(order => 
-            order.customerId === doc.id || 
-            order.customerPhone === data.phone
+            order.customerId === doc.id
           );
 
           const totalOrders = customerOrders.length;
@@ -151,9 +150,15 @@ export const useCustomerStore = create<CustomerState>(
 
     addCustomer: async (customerData) => {
       try {
+        // Remove undefined values
+        const cleanCustomerData = Object.fromEntries(
+          Object.entries(customerData).filter(([_, v]) => v !== undefined)
+        );
+
         // Add customer to Firestore
         const customerRef = await addDoc(collection(db, 'customers'), {
-          ...customerData,
+          ...cleanCustomerData,
+          companyNames: cleanCustomerData.companyNames || [],
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now()
         });
@@ -161,7 +166,8 @@ export const useCustomerStore = create<CustomerState>(
         // Create a new customer object with default values
         const newCustomer = {
           id: customerRef.id,
-          ...customerData,
+          ...cleanCustomerData,
+          companyNames: cleanCustomerData.companyNames || [],
           createdAt: new Date(),
           totalOrders: 0,
           totalRevenue: 0
@@ -219,8 +225,7 @@ export const useCustomerStore = create<CustomerState>(
         // Recalculate total orders and revenue
         const { orders } = useOrderStore.getState();
         const customerOrders = orders.filter(order => 
-          order.customerId === id || 
-          order.customerPhone === customerData.phone
+          order.customerId === id
         );
 
         const totalOrders = customerOrders.length;
@@ -305,7 +310,7 @@ export const useCustomerStore = create<CustomerState>(
                 firstName: customer.firstName,
                 lastName: customer.lastName,
                 email: customer.email,
-                phone: customer.number
+                phone: customer.phone
               }
             }
           });

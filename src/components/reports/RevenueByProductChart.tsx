@@ -2,21 +2,25 @@ import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useOrderStore } from '../../store/orderStore';
 import { useProductStore } from '../../store/productStore';
+import { usePaymentStore } from '../../store/paymentStore';
 import { getDateRange } from '../../utils/dateRange';
 
 interface RevenueByProductChartProps {
   timeRange: string;
   customStartDate?: Date | null;
   customEndDate?: Date | null;
+  viewType?: 'paid' | 'all';
 }
 
 export default function RevenueByProductChart({ 
   timeRange,
   customStartDate,
-  customEndDate 
+  customEndDate,
+  viewType = 'paid'
 }: RevenueByProductChartProps) {
   const { orders = [] } = useOrderStore();
   const { products = [] } = useProductStore();
+  const { payments = [] } = usePaymentStore();
 
   // Get date range based on selected filter
   const { startDate, endDate } = customStartDate && customEndDate 
@@ -30,8 +34,23 @@ export default function RevenueByProductChart({
     return orderDate >= startDate && orderDate <= endDate;
   });
 
+  // Get paid orders if viewType is 'paid'
+  const paidOrderIds = viewType === 'paid' 
+    ? new Set(
+        payments
+          .filter(payment => {
+            const paymentDate = new Date(payment.date);
+            return paymentDate >= startDate && paymentDate <= endDate;
+          })
+          .map(payment => payment.orderId)
+      )
+    : null;
+
   // Calculate revenue by product
   const revenueByProduct = filteredOrders.reduce((acc, order) => {
+    // Skip if we're only looking at paid orders and this order isn't paid
+    if (viewType === 'paid' && !paidOrderIds?.has(order.id)) return acc;
+
     if (!order?.products) return acc;
     
     order.products.forEach(orderProduct => {
@@ -64,7 +83,12 @@ export default function RevenueByProductChart({
   // Convert to chart data and sort by revenue
   const chartData = Object.values(revenueByProduct)
     .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 10); // Show top 10 products
+    .slice(0, 10) // Show top 10 products
+    .map(product => ({
+      ...product,
+      // Truncate name to 20 characters and add ellipsis if longer
+      displayName: product.name.length > 20 ? product.name.substring(0, 20) + '...' : product.name
+    }));
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
@@ -91,16 +115,20 @@ export default function RevenueByProductChart({
             />
             <YAxis
               type="category"
-              dataKey="name"
+              dataKey="displayName"
               width={150}
               stroke="var(--chart-text)"
-              tick={{ fill: 'var(--chart-text)' }}
+              tick={{ 
+                fill: 'var(--chart-text)',
+                fontSize: 12,
+              }}
             />
             <Tooltip
               formatter={(value: number, name: string, props: any) => {
-                const item = chartData.find(d => d.name === props.payload.name);
+                const item = chartData.find(d => d.displayName === props.payload.displayName);
                 return [
                   <>
+                    <div>Product: {item?.name}</div>
                     <div>Revenue: ${value.toLocaleString()}</div>
                     <div>Quantity: {item?.quantity}</div>
                     <div>Orders: {item?.orders}</div>

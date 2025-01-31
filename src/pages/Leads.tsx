@@ -35,13 +35,13 @@ export default function Leads() {
   const { 
     leads, 
     loading, 
-    error, 
-    initialize, 
-    syncWithManyChat, 
-    updateLeadStatus, 
-    updateLeadNotes, 
-    hideLead, 
-    convertToCustomer, 
+    error,
+    initialize,
+    syncWithManyContact,
+    updateLeadStatus,
+    updateLeadNotes,
+    hideLead,
+    convertToCustomer,
     addLeadNote 
   } = useLeadStore();
   
@@ -87,7 +87,7 @@ export default function Leads() {
   }, [initialize]);
 
   const handleSync = async () => {
-    await syncWithManyChat();
+    await syncWithManyContact();
   };
 
   const handleStatusChange = async (leadId: string, status: Lead['status']) => {
@@ -262,7 +262,7 @@ export default function Leads() {
           ) : (
             <RefreshCw className="-ml-1 mr-2 h-4 w-4" />
           )}
-          Sync with ManyChat
+          Sync with ManyContact
         </button>
       </div>
 
@@ -400,16 +400,15 @@ export default function Leads() {
                             {lead.tags && lead.tags.length > 0 && (
                               <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
                                 <Tag className="mr-2 h-4 w-4" />
-                                <div className="flex flex-wrap gap-1">
-                                  {lead.tags.map((tag: any, index: number) => (
-                                    <span
-                                      key={index}
-                                      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"
-                                    >
-                                      {typeof tag === 'string' ? tag : tag.name || 'Unknown Tag'}
-                                    </span>
-                                  ))}
-                                </div>
+                                <span>{lead.tags.join(', ')}</span>
+                              </div>
+                            )}
+                            {lead.lastMessageAt && (
+                              <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                                <Clock className="mr-2 h-4 w-4" />
+                                <span>
+                                  Last Contact: {format(lead.lastMessageAt.toDate(), 'MMM d, yyyy HH:mm')}
+                                </span>
                               </div>
                             )}
                             <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">

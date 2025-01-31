@@ -9,6 +9,7 @@ interface CustomerTableProps {
   onEditClick: (customer: Customer) => void;
   onDeleteClick: (customer: Customer) => void;
   onSendMessageClick: (customer: Customer) => void;
+  sendingMessageToCustomerId?: string | null;
 }
 
 export default function CustomerTable({
@@ -16,7 +17,8 @@ export default function CustomerTable({
   canManageCustomers,
   onEditClick,
   onDeleteClick,
-  onSendMessageClick
+  onSendMessageClick,
+  sendingMessageToCustomerId
 }: CustomerTableProps) {
   return (
     <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg overflow-hidden">
@@ -32,6 +34,7 @@ export default function CustomerTable({
                 onEditClick={onEditClick}
                 onDeleteClick={onDeleteClick}
                 onSendMessageClick={onSendMessageClick}
+                isSendingMessage={sendingMessageToCustomerId === customer.id}
               />
             ))}
           </tbody>

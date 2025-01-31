@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { format } from 'date-fns';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import { 
   Mail, 
   Lock, 
@@ -14,13 +15,13 @@ import {
   User,
   CreditCard,
   Building2,
-  Phone
+  Phone,
+  DollarSign
 } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
-import { useOrderStore } from '../store/orderStore';
 import { useThemeStore } from '../store/themeStore';
-import { useCustomerDocumentStore } from '../store/customerDocumentStore';
+import { useCustomerPortalStore } from '../store/customerPortalStore';
 import { useCommunicationStore } from '../store/communicationStore';
+import { usePaymentStore } from '../store/paymentStore';
 import ServiceStages from '../components/portal/ServiceStages';
 import OrderTimeline from '../components/portal/OrderTimeline';
 import CommunicationLog from '../components/portal/CommunicationLog';
@@ -40,135 +41,261 @@ export default function CustomerPortal() {
   const [activeTab, setActiveTab] = useState<TabType>('tracking');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  const { authenticateCustomer, user, logout } = useAuthStore();
-  const { orders = [], initialize: initOrders } = useOrderStore();
   const { isDarkMode, toggleTheme } = useThemeStore();
-  const { getDocumentsByCustomer, initialize: initDocuments } = useCustomerDocumentStore();
-  const { initialize: initCommunications } = useCommunicationStore();
+  const { 
+    customer,
+    orders,
+    documents,
+    communications,
+    payments,
+    authenticate,
+    logout: portalLogout,
+    loading: portalLoading,
+    error: portalError 
+  } = useCustomerPortalStore();
 
-  // Get all orders for the authenticated customer
-  const customerOrders = user ? orders.filter(o => o?.customerId === user.id) : [];
-  const selectedOrder = selectedOrderId 
-    ? customerOrders.find(o => o.id === selectedOrderId)
-    : customerOrders[0];
-  const documents = user ? getDocumentsByCustomer(user.id) : [];
+  const { initialize: initializeCommunications } = useCommunicationStore();
+  const { initialize: initializePayments } = usePaymentStore();
 
+  // Initialize stores when customer logs in
+  React.useEffect(() => {
+    if (customer) {
+      const unsubPromises = [
+        initializeCommunications(customer.id),
+        initializePayments()
+      ];
+
+      return () => {
+        unsubPromises.forEach(promise => {
+          promise?.then(unsub => unsub?.());
+        });
+      };
+    }
+  }, [customer, initializeCommunications, initializePayments]);
+
+  // Set initial selected order and tab when customer logs in
   useEffect(() => {
-    if (user) {
-      Promise.all([
-        initDocuments(),
-        initOrders(),
-        initCommunications()
-      ]).catch(error => {
-        console.error('Error initializing data:', error);
-      });
+    if (customer && orders.length > 0 && !selectedOrderId) {
+      setSelectedOrderId(orders[0].id);
+      setActiveTab('tracking'); // Set default tab to tracking when orders are loaded
     }
-  }, [user, initDocuments, initOrders, initCommunications]);
+  }, [customer, orders, selectedOrderId]);
 
+  // Reset state when customer logs out
   useEffect(() => {
-    if (customerOrders.length > 0 && !selectedOrderId) {
-      setSelectedOrderId(customerOrders[0].id);
+    if (!customer) {
+      setSelectedOrderId(null);
+      setActiveTab('tracking');
     }
-  }, [customerOrders]);
+  }, [customer]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      await authenticateCustomer(email, passportNumber);
-      setToastMessage('Authentication successful');
-      setToastType('success');
-      setShowToast(true);
-    } catch (error: any) {
-      setToastMessage(error.message || 'Authentication failed');
-      setToastType('error');
-      setShowToast(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-      navigate('/portal');
-    } catch (error: any) {
-      setToastMessage(error.message || 'Failed to logout');
-      setToastType('error');
-      setShowToast(true);
-    }
-  };
+  // Get the currently selected order
+  const selectedOrder = orders.find(order => order.id === selectedOrderId);
 
   const renderAccountInfo = () => {
-    if (!user || !selectedOrder) return null;
+    if (!customer || !selectedOrder) return null;
+
+    // Filter payments for the selected order
+    const orderPayments = payments.filter(payment => {
+      console.log('Checking payment:', payment, 'against order:', selectedOrder.id);
+      return payment.orderId === selectedOrder.id;
+    });
+
+    console.log('All payments:', payments);
+    console.log('Filtered payments for order:', orderPayments);
+    console.log('Selected order:', selectedOrder);
 
     return (
       <div className="space-y-6">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Account Details</h2>
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center space-x-3">
               <User className="h-5 w-5 text-gray-400 dark:text-gray-300" />
               <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{customer.firstName} {customer.lastName}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Full Name</p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
               <Mail className="h-5 w-5 text-gray-400 dark:text-gray-300" />
               <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{user.email}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{customer.email}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Email Address</p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
               <Building2 className="h-5 w-5 text-gray-400 dark:text-gray-300" />
               <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{selectedOrder.companyName}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{customer.companyName || 'Not provided'}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Company Name</p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
               <Phone className="h-5 w-5 text-gray-400 dark:text-gray-300" />
               <div>
-                <p className="text-sm font-medium text-gray-900 dark:text-white">{user.phone || 'Not provided'}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">{customer.phone || 'Not provided'}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">Phone Number</p>
               </div>
             </div>
           </div>
         </div>
 
-        {documents.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Documents</h2>
-              <FileText className="h-5 w-5 text-gray-400 dark:text-gray-300" />
-            </div>
-            <div className="grid gap-2 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-              {documents.map((doc) => (
+        {/* Payment History Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Payment History</h3>
+            <DollarSign className="h-5 w-5 text-gray-400 dark:text-gray-300" />
+          </div>
+          <div className="space-y-3">
+            {orderPayments && orderPayments.length > 0 ? (
+              orderPayments.map((payment) => (
                 <div
-                  key={doc.id}
-                  onClick={() => window.open(doc.fileUrl, '_blank', 'noopener,noreferrer')}
-                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors cursor-pointer"
+                  key={payment.id}
+                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
                 >
-                  <div className="flex items-center space-x-3 flex-grow min-w-0">
-                    <FileText className="h-5 w-5 flex-shrink-0 text-gray-400 dark:text-gray-300" />
-                    <div className="truncate">
-                      <span className="text-sm font-medium text-gray-900 dark:text-white block truncate">
-                        {doc.fileName}
-                      </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        Click to view
-                      </span>
+                  <div className="flex items-center space-x-3">
+                    <DollarSign className="h-5 w-5 text-gray-400 dark:text-gray-300" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {typeof payment.amount === 'number' 
+                          ? payment.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+                          : payment.amount ? payment.amount.toString() : 'Amount not available'}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {payment.createdAt && payment.createdAt.toDate ? payment.createdAt.toDate().toLocaleDateString() : 
+                         payment.createdAt ? new Date(payment.createdAt).toLocaleDateString() : 
+                         payment.date && payment.date.toDate ? payment.date.toDate().toLocaleDateString() :
+                         payment.date ? new Date(payment.date).toLocaleDateString() : 'Date not available'}
+                      </p>
                     </div>
                   </div>
-                  <Download className="h-5 w-5 text-gray-400 dark:text-gray-300 ml-2" />
+                  <span className={`px-2 py-1 text-xs font-medium rounded ${
+                    payment.status === 'completed' 
+                      ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
+                      : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-800 dark:text-yellow-100'
+                  }`}>
+                    {payment.status ? payment.status.charAt(0).toUpperCase() + payment.status.slice(1) : 'Status unknown'}
+                  </span>
                 </div>
-              ))}
-            </div>
+              ))
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">No payment history available for this order</p>
+            )}
           </div>
-        )}
+        </div>
+
+        {/* Documents Section - Always show the section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Documents</h2>
+            <FileText className="h-5 w-5 text-gray-400 dark:text-gray-300" />
+          </div>
+          <div className="grid gap-2">
+            {documents.length > 0 ? (
+              documents.map((doc) => {
+                console.log('Rendering document:', doc);
+                return (
+                  <div
+                    key={doc.id}
+                    onClick={() => {
+                      console.log('Opening document URL:', doc.fileUrl);
+                      if (doc.fileUrl) {
+                        window.open(doc.fileUrl, '_blank', 'noopener,noreferrer');
+                      }
+                    }}
+                    className={`flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg ${
+                      doc.fileUrl ? 'hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer' : ''
+                    } transition-colors`}
+                  >
+                    <div className="flex items-center space-x-3 flex-grow min-w-0">
+                      <FileText className="h-5 w-5 flex-shrink-0 text-gray-400 dark:text-gray-300" />
+                      <div className="truncate">
+                        <span className="text-sm font-medium text-gray-900 dark:text-white block truncate">
+                          {doc.description || doc.name || doc.fileName || 'Untitled Document'}
+                        </span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                          {doc.uploadedAt?.toDate?.() ? doc.uploadedAt.toDate().toLocaleDateString() :
+                           doc.uploadedAt ? new Date(doc.uploadedAt.seconds * 1000).toLocaleDateString() :
+                           doc.createdAt?.toDate?.() ? doc.createdAt.toDate().toLocaleDateString() :
+                           doc.createdAt ? new Date(doc.createdAt.seconds * 1000).toLocaleDateString() :
+                           'Date not available'}
+                        </span>
+                      </div>
+                    </div>
+                    {doc.fileUrl && <Download className="h-5 w-5 text-gray-400 dark:text-gray-300 ml-2" />}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-sm text-gray-500 dark:text-gray-400">No documents available</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Communications Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Communication History</h2>
+            <MessageCircle className="h-5 w-5 text-gray-400 dark:text-gray-300" />
+          </div>
+          <div className="space-y-4 max-h-[400px] overflow-y-auto">
+            {communications.length > 0 ? (
+              communications.map((comm) => (
+                <div 
+                  key={comm.id} 
+                  className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-gray-900 dark:text-white capitalize">
+                      {comm.type}
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {comm.createdAt?.toDate ? comm.createdAt.toDate().toLocaleDateString() :
+                       comm.createdAt ? new Date(comm.createdAt.seconds * 1000).toLocaleDateString() :
+                       'Date not available'}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap">
+                    {comm.summary}
+                  </p>
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-gray-500 dark:text-gray-400 py-4">
+                No communications yet
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderOrderSelect = () => {
+    if (!customer || orders.length <= 1) return null;
+
+    return (
+      <div className="mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+          <label htmlFor="orderSelect" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Select Order
+          </label>
+          <select
+            id="orderSelect"
+            value={selectedOrderId || ''}
+            onChange={(e) => setSelectedOrderId(e.target.value)}
+            className="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-white"
+          >
+            {orders.map((order) => (
+              <option key={order.id} value={order.id}>
+                #{order.orderNumber} - {order.companyName} - {order.serviceType} (${order.totalAmount.toLocaleString()})
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
     );
   };
@@ -184,36 +311,121 @@ export default function CustomerPortal() {
 
     return (
       <div className="space-y-6">
-        {user && customerOrders.length > 1 && (
-          <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
-            <label htmlFor="orderSelect" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Select Order
-            </label>
-            <select
-              id="orderSelect"
-              value={selectedOrderId || ''}
-              onChange={(e) => setSelectedOrderId(e.target.value)}
-              className="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-white"
-            >
-              {customerOrders.map((order) => (
-                <option key={order.id} value={order.id}>
-                  #{order.orderNumber} - {order.companyName} - {order.serviceType} (${order.totalAmount.toLocaleString()}) - {new Date(order.createdAt).toLocaleDateString()}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
         <ServiceStages order={selectedOrder} />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <OrderTimeline order={selectedOrder} />
-          <CommunicationLog />
+        <div className="grid grid-cols-1 gap-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
+            <OrderTimeline order={selectedOrder} />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setShowToast(false);
+
+    try {
+      await authenticate(email, passportNumber);
+      setToastMessage('Login successful');
+      setToastType('success');
+    } catch (error: any) {
+      console.error('Login error:', error);
+      setToastMessage(error.message || 'Login failed. Please check your credentials.');
+      setToastType('error');
+    } finally {
+      setShowToast(true);
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    portalLogout();
+    navigate('/portal');
+  };
+
+  const renderLoginForm = () => {
+    if (customer) return null;
+
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 px-4 py-8">
+        <div className="w-full max-w-md bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-8 space-y-6 border border-gray-200 dark:border-gray-700">
+          <div className="text-center">
+            <img
+              className="mx-auto h-16 w-auto mb-4"
+              src={isDarkMode 
+                ? "https://res.cloudinary.com/fresh-ideas/image/upload/v1732284592/w95dfo6gv7dckea8htsj.png"
+                : "https://res.cloudinary.com/fresh-ideas/image/upload/v1732284592/rqo2kuav7gd3ntuciejw.png"
+              }
+              alt="MG Accountants"
+            />
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Customer Portal</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-300">Login to access your account details</p>
+          </div>
+          
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Email Address
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Mail className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+                </div>
+                <input
+                  type="email"
+                  id="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="Enter your email"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white transition-all duration-200"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label htmlFor="passport" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Passport Number
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-gray-400 dark:text-gray-500" />
+                </div>
+                <input
+                  type="text"
+                  id="passport"
+                  value={passportNumber}
+                  onChange={(e) => setPassportNumber(e.target.value)}
+                  required
+                  placeholder="Enter your passport number"
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white transition-all duration-200"
+                />
+              </div>
+            </div>
+            
+            <button 
+              type="submit" 
+              disabled={loading}
+              className="btn-primary w-full flex justify-center bg-gradient-to-r from-primary-600 to-primary-500 hover:from-primary-500 hover:to-primary-400"
+            >
+              {loading ? 'Authenticating...' : 'Login'}
+            </button>
+          </form>
+          
+          <div className="text-center">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
+              Need help? <a href="/contact" className="text-blue-600 hover:underline">Contact Support</a>
+            </p>
+          </div>
         </div>
       </div>
     );
   };
 
   const renderContent = () => {
-    if (!user) {
+    if (!customer) {
       return (
         <div className="text-center">
           <p className="text-gray-600 dark:text-gray-400">Please log in to view your orders.</p>
@@ -237,16 +449,6 @@ export default function CustomerPortal() {
                 Order Tracking
               </button>
               <button
-                onClick={() => setActiveTab('payments')}
-                className={`py-4 px-1 inline-flex items-center border-b-2 ${
-                  activeTab === 'payments'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
-                }`}
-              >
-                Payment History
-              </button>
-              <button
                 onClick={() => setActiveTab('account')}
                 className={`py-4 px-1 inline-flex items-center border-b-2 ${
                   activeTab === 'account'
@@ -260,156 +462,91 @@ export default function CustomerPortal() {
           </div>
         </div>
         {activeTab === 'tracking' && renderOrderTracking()}
-        {activeTab === 'payments' && selectedOrder && (
-          <PaymentHistory orderId={selectedOrder.id} />
-        )}
         {activeTab === 'account' && renderAccountInfo()}
       </div>
     );
   };
 
   return (
-    <div className={`min-h-screen ${isDarkMode ? 'dark bg-gray-900' : 'bg-gray-50'}`}>
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {user ? (
-          <>
-            <div className="flex justify-between items-center mb-8">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                  Welcome, {user.name}
-                </h1>
-                <p className="mt-2 text-gray-600 dark:text-gray-300">
-                  Track your order status and manage your account
-                </p>
-              </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+      {/* Header with Theme Toggle and Logout */}
+      {customer && (
+        <div className="bg-white dark:bg-gray-800 shadow-sm">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex justify-between items-center">
+              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Welcome, {customer.firstName} {customer.lastName}
+              </h1>
               <div className="flex items-center space-x-4">
-                <button
-                  onClick={toggleTheme}
-                  className="p-2 rounded-lg bg-white/10 backdrop-blur-sm hover:bg-white/20 transition-all duration-200"
+                <button 
+                  onClick={toggleTheme} 
+                  className="p-2 bg-gray-100 dark:bg-gray-700 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                   aria-label="Toggle theme"
                 >
-                  {isDarkMode ? (
-                    <Sun className="h-5 w-5 text-white" />
-                  ) : (
-                    <Moon className="h-5 w-5 text-gray-600" />
-                  )}
+                  {isDarkMode ? 
+                    <Sun className="h-5 w-5 text-gray-900 dark:text-gray-100" /> : 
+                    <Moon className="h-5 w-5 text-gray-900 dark:text-gray-100" />
+                  }
                 </button>
-                <button
+                <button 
                   onClick={handleLogout}
-                  className="p-2 rounded-lg bg-white/10 backdrop-blur-sm hover:bg-white/20 transition-all duration-200 text-red-500"
-                  aria-label="Logout"
+                  className="flex items-center space-x-2 px-3 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-red-600 dark:hover:text-red-400 transition-colors"
                 >
                   <LogOut className="h-5 w-5" />
+                  <span>Logout</span>
                 </button>
               </div>
             </div>
-
-            <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-8">
-              {renderContent()}
-            </div>
-
-            {/* Sticky WhatsApp Button */}
-            <div className="fixed bottom-6 right-6">
-              <a
-                href="https://wa.me/447462252406"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center w-12 h-12 bg-green-500 hover:bg-green-600 rounded-full shadow-lg transition-colors duration-200"
-              >
-                <MessageCircle className="h-6 w-6 text-white" />
-              </a>
-            </div>
-          </>
-        ) : (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-            <div className="flex justify-between items-center mb-6">
-              <img
-                src="https://res.cloudinary.com/fresh-ideas/image/upload/v1732284592/rqo2kuav7gd3ntuciejw.png"
-                alt="MG Accountants"
-                className="h-12"
-              />
-              <button
-                onClick={toggleTheme}
-                className="p-2 rounded-lg bg-white/10 backdrop-blur-sm hover:bg-white/20 transition-all duration-200"
-                aria-label="Toggle theme"
-              >
-                {isDarkMode ? (
-                  <Sun className="h-5 w-5 text-white" />
-                ) : (
-                  <Moon className="h-5 w-5 text-gray-600" />
-                )}
-              </button>
-            </div>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Email Address
-                </label>
-                <div className="mt-1 relative">
-                  <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-                  <input
-                    id="email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="modern-input pl-10"
-                    placeholder="Enter your email"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="passport" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Passport Number
-                </label>
-                <div className="mt-1 relative">
-                  <Lock className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-                  <input
-                    id="passport"
-                    type="text"
-                    required
-                    value={passportNumber}
-                    onChange={(e) => setPassportNumber(e.target.value.toUpperCase())}
-                    className="modern-input pl-10"
-                    placeholder="Enter your passport number"
-                    pattern="[A-Z0-9]+"
-                  />
-                </div>
-              </div>
-
-              <div className="bg-yellow-50 dark:bg-yellow-900/50 rounded-md p-4">
-                <div className="flex">
-                  <AlertCircle className="h-5 w-5 text-yellow-400 dark:text-yellow-300 mr-2" />
-                  <div>
-                    <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                      Important Note
-                    </h3>
-                    <p className="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-                      Please use your registered email address and passport number to access your account.
-                      Contact support if you need assistance.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Authenticating...' : 'Login'}
-              </button>
-            </form>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
+      {/* Render Login Form if not authenticated */}
+      {renderLoginForm()}
+
+      {/* Render Portal Content if authenticated */}
+      {customer && (
+        <div className="container mx-auto px-4 py-8">
+          {/* Portal Tabs */}
+          <div className="flex justify-center mb-8">
+            <div className="inline-flex bg-white dark:bg-gray-800 rounded-lg shadow-md">
+              {[
+                { key: 'tracking', icon: MessageCircle, label: 'Order Tracking' },
+                { key: 'account', icon: User, label: 'Account' },
+              ].map(({ key, icon: Icon, label }) => (
+                <button
+                  key={key}
+                  onClick={() => setActiveTab(key as TabType)}
+                  className={`px-4 py-2 flex items-center space-x-2 text-sm font-medium transition-colors ${
+                    activeTab === key 
+                      ? 'bg-blue-500 text-white' 
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  } ${key === 'tracking' ? 'rounded-l-lg' : 'rounded-r-lg'}`}
+                >
+                  <Icon className="h-5 w-5" />
+                  <span className="hidden md:inline">{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Order Selection Dropdown */}
+          {renderOrderSelect()}
+
+          {/* Tab Content */}
+          <div className="max-w-4xl mx-auto">
+            {activeTab === 'tracking' && renderOrderTracking()}
+            {activeTab === 'account' && renderAccountInfo()}
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
       {showToast && (
-        <Toast
-          message={toastMessage}
-          type={toastType}
-          onClose={() => setShowToast(false)}
+        <Toast 
+          message={toastMessage} 
+          type={toastType} 
+          onClose={() => setShowToast(false)} 
         />
       )}
     </div>

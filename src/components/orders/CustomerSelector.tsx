@@ -38,7 +38,7 @@ export default function CustomerSelector({
       <div className="flex items-center justify-end mb-6">
         <button
           onClick={onNewCustomer}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+          className="btn-primary inline-flex items-center"
         >
           <Plus className="h-4 w-4 mr-2" />
           New Customer

@@ -31,10 +31,11 @@ export default function Reports() {
   const [customStartDate, setCustomStartDate] = useState<Date | null>(null);
   const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
 
-  // Individual component date ranges
+  // Individual component date ranges and view types
   const [revenueTimeRange, setRevenueTimeRange] = useState('7d');
   const [revenueStartDate, setRevenueStartDate] = useState<Date | null>(null);
   const [revenueEndDate, setRevenueEndDate] = useState<Date | null>(null);
+  const [revenueViewType, setRevenueViewType] = useState<'paid' | 'all'>('paid');
 
   const [paymentsTimeRange, setPaymentsTimeRange] = useState('7d');
   const [paymentsStartDate, setPaymentsStartDate] = useState<Date | null>(null);
@@ -43,6 +44,7 @@ export default function Reports() {
   const [categoryTimeRange, setCategoryTimeRange] = useState('7d');
   const [categoryStartDate, setCategoryStartDate] = useState<Date | null>(null);
   const [categoryEndDate, setCategoryEndDate] = useState<Date | null>(null);
+  const [categoryViewType, setCategoryViewType] = useState<'paid' | 'all'>('paid');
 
   const { orders = [], getOrderStats, getOrderTrends } = useOrderStore();
   const { customers = [] } = useCustomerStore();
@@ -175,31 +177,42 @@ export default function Reports() {
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Revenue by Product</h2>
-            <select
-              value={revenueTimeRange}
-              onChange={(e) => {
-                if (e.target.value === 'custom') {
-                  setActiveDatePicker('revenue');
-                  setShowDatePicker(true);
-                } else {
-                  setRevenueTimeRange(e.target.value);
-                  setRevenueStartDate(null);
-                  setRevenueEndDate(null);
-                }
-              }}
-              className="modern-select px-4 py-2"
-            >
-              {timeRanges.map(range => (
-                <option key={range.value} value={range.value}>
-                  {range.label}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center space-x-4">
+              <select
+                value={revenueTimeRange}
+                onChange={(e) => {
+                  if (e.target.value === 'custom') {
+                    setActiveDatePicker('revenue');
+                    setShowDatePicker(true);
+                  } else {
+                    setRevenueTimeRange(e.target.value);
+                    setRevenueStartDate(null);
+                    setRevenueEndDate(null);
+                  }
+                }}
+                className="modern-select px-4 py-2"
+              >
+                {timeRanges.map(range => (
+                  <option key={range.value} value={range.value}>
+                    {range.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={revenueViewType}
+                onChange={(e) => setRevenueViewType(e.target.value as 'paid' | 'all')}
+                className="modern-select px-4 py-2"
+              >
+                <option value="paid">Paid</option>
+                <option value="all">All</option>
+              </select>
+            </div>
           </div>
           <RevenueByProductChart 
             timeRange={revenueTimeRange} 
             customStartDate={revenueStartDate} 
             customEndDate={revenueEndDate} 
+            viewType={revenueViewType}
           />
         </div>
 
@@ -237,31 +250,42 @@ export default function Reports() {
         <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
           <div className="flex justify-between items-center mb-6">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Revenue by Category</h2>
-            <select
-              value={categoryTimeRange}
-              onChange={(e) => {
-                if (e.target.value === 'custom') {
-                  setActiveDatePicker('category');
-                  setShowDatePicker(true);
-                } else {
-                  setCategoryTimeRange(e.target.value);
-                  setCategoryStartDate(null);
-                  setCategoryEndDate(null);
-                }
-              }}
-              className="modern-select px-4 py-2"
-            >
-              {timeRanges.map(range => (
-                <option key={range.value} value={range.value}>
-                  {range.label}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center space-x-4">
+              <select
+                value={categoryTimeRange}
+                onChange={(e) => {
+                  if (e.target.value === 'custom') {
+                    setActiveDatePicker('category');
+                    setShowDatePicker(true);
+                  } else {
+                    setCategoryTimeRange(e.target.value);
+                    setCategoryStartDate(null);
+                    setCategoryEndDate(null);
+                  }
+                }}
+                className="modern-select px-4 py-2"
+              >
+                {timeRanges.map(range => (
+                  <option key={range.value} value={range.value}>
+                    {range.label}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={categoryViewType}
+                onChange={(e) => setCategoryViewType(e.target.value as 'paid' | 'all')}
+                className="modern-select px-4 py-2"
+              >
+                <option value="paid">Paid</option>
+                <option value="all">All</option>
+              </select>
+            </div>
           </div>
           <RevenueByCategoryChart 
             timeRange={categoryTimeRange} 
             customStartDate={categoryStartDate} 
             customEndDate={categoryEndDate} 
+            viewType={categoryViewType}
           />
         </div>
 

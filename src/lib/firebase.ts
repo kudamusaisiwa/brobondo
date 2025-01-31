@@ -59,6 +59,26 @@ const firebaseConfig = {
 // Initialize Firebase app
 const app = initializeApp(firebaseConfig);
 
+// Initialize services
+const auth = getAuth(app);
+const db = initializeFirestore(app, {
+  cache: persistentLocalCache({
+    tabManager: persistentMultipleTabManager(),
+    cacheSizeBytes: 'unlimited'
+  })
+});
+const rtdb = getDatabase(app);
+const storage = getStorage(app);
+
+// Export initialized services
+export {
+  app,
+  auth,
+  db,
+  rtdb,
+  storage
+};
+
 // Network and connection utilities
 const networkUtils = {
   isEmulatorRunning: async (host: string, port: number): Promise<boolean> => {
@@ -153,21 +173,6 @@ class FirebaseAuthError extends Error {
   }
 }
 
-// Initialize Realtime Database first
-const rtdb = getDatabase(app);
-
-// Initialize Firestore with persistence
-const db = initializeFirestore(app, {
-  cache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager(),
-    cacheSizeBytes: 'unlimited'
-  })
-});
-
-// Initialize other services
-const auth = getAuth(app);
-const storage = getStorage(app);
-
 // Enable multi-tab persistence
 const enableFirestorePersistence = async () => {
   try {
@@ -260,9 +265,6 @@ const initializeFirebaseServices = async () => {
   }
 };
 
-// Call initialization on module load
-initializeFirebaseServices();
-
 // Utility functions
 const isFirebaseInitialized = () => {
   return !!app && !!auth && !!db;
@@ -321,13 +323,8 @@ const handleFirestoreError = (error: any): string => {
   }
 };
 
-// Explicit exports
-export { 
-  app, 
-  auth, 
-  db, 
-  rtdb, 
-  storage, 
+// Export utility functions
+export {
   networkUtils,
   isFirebaseInitialized,
   fromFirebaseTimestamp,
@@ -336,4 +333,5 @@ export {
   handleFirestoreError
 };
 
-export default app;
+// Call initialization on module load
+initializeFirebaseServices();

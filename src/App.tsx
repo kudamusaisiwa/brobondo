@@ -38,6 +38,8 @@ import Leads from './pages/Leads';
 import CustomerPortal from './pages/CustomerPortal';
 import PrivateRoute from './components/auth/PrivateRoute';
 import Toast from './components/ui/Toast';
+import CustomerLogin from './pages/CustomerLogin';
+import { Toaster } from 'react-hot-toast';
 
 export default function App() {
   const { isDarkMode } = useThemeStore();
@@ -92,51 +94,78 @@ export default function App() {
   }, [initializeNotifications, requestPermission]);
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/reset-password" element={<ResetPassword />} />
-        <Route path="/portal" element={<CustomerPortal />} />
-        
-        <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
-          <Route index element={<Dashboard />} />
-          <Route path="customers" element={<Customers />} />
-          <Route path="leads" element={<Leads />} />
-          <Route path="customers/:id" element={<CustomerDetails />} />
-          <Route path="orders" element={<Orders />} />
-          <Route path="orders/all" element={<AllOrders />} />
-          <Route path="orders/:id" element={<OrderDetails />} />
-          <Route path="orders/:id/edit" element={<EditOrder />} />
-          <Route path="products" element={<Products />} />
-          <Route path="products/add" element={<AddProduct />} />
-          <Route path="activities" element={<Activities />} />
-          <Route path="deliveries" element={<DeliveryCalendar />} />
-          <Route path="deliveries/:date" element={<DeliveryDayView />} />
-          <Route path="payments" element={<PaymentManagement />} />
-          <Route path="tasks" element={<Tasks />} />
-          <Route path="expenses" element={<Expenses />} />
-          <Route path="chat" element={<Chat />} />
-          <Route path="help" element={<Help />} />
-          {canViewUsers ? (
-            <>
-              <Route path="users" element={<Users />} />
-              <Route path="users/add" element={<AddUser />} />
-            </>
-          ) : (
-            <Route path="users/*" element={<Navigate to="/" replace />} />
-          )}
-          <Route path="reports" element={<Reports />} />
-        </Route>
-      </Routes>
+    <div className={isDarkMode ? 'dark' : ''}>
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#333',
+            color: '#fff',
+          },
+          success: {
+            duration: 5000,
+            iconTheme: {
+              primary: '#4ade80',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            duration: 5000,
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/portal" element={<CustomerPortal />} />
+          <Route path="/customer/login" element={<CustomerLogin />} />
+          
+          <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
+            <Route index element={<Dashboard />} />
+            <Route path="customers" element={<Customers />} />
+            <Route path="leads" element={<Leads />} />
+            <Route path="customers/:id" element={<CustomerDetails />} />
+            <Route path="orders" element={<Orders />} />
+            <Route path="orders/all" element={<AllOrders />} />
+            <Route path="orders/:id" element={<OrderDetails />} />
+            <Route path="orders/:id/edit" element={<EditOrder />} />
+            <Route path="products" element={<Products />} />
+            <Route path="products/add" element={<AddProduct />} />
+            <Route path="activities" element={<Activities />} />
+            <Route path="deliveries" element={<DeliveryCalendar />} />
+            <Route path="deliveries/:date" element={<DeliveryDayView />} />
+            <Route path="payments" element={<PaymentManagement />} />
+            <Route path="tasks" element={<Tasks />} />
+            <Route path="expenses" element={<Expenses />} />
+            <Route path="chat" element={<Chat />} />
+            <Route path="help" element={<Help />} />
+            {canViewUsers ? (
+              <>
+                <Route path="users" element={<Users />} />
+                <Route path="users/add" element={<AddUser />} />
+              </>
+            ) : (
+              <Route path="users/*" element={<Navigate to="/" replace />} />
+            )}
+            <Route path="reports" element={<Reports />} />
+          </Route>
+        </Routes>
 
-      {authError && (
-        <Toast
-          message={authError}
-          type="error"
-          onClose={clearAuthError}
-        />
-      )}
-    </BrowserRouter>
+        {authError && (
+          <Toast
+            message={authError}
+            type="error"
+            onClose={clearAuthError}
+          />
+        )}
+      </BrowserRouter>
+    </div>
   );
 }

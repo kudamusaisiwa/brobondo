@@ -12,7 +12,7 @@ import CompanyDetailsCard from '../components/customers/CompanyDetailsCard';
 import CustomerDocuments from '../components/customers/CustomerDocuments';
 import AddCommunicationModal from '../components/AddCommunicationModal';
 import EditCustomerModal from '../components/modals/EditCustomerModal';
-import SendCustomerMessageModal from '../components/modals/SendCustomerMessageModal';
+import SendMessageModal from '../components/modals/SendMessageModal';
 import Toast from '../components/ui/Toast';
 
 export default function CustomerDetails() {
@@ -28,7 +28,20 @@ export default function CustomerDetails() {
   const { orders, initialize: initOrders } = useOrderStore();
   const { addCommunication, initialize: initCommunications } = useCommunicationStore();
   const { user } = useAuthStore();
-  const paymentStore = usePaymentStore(); // Initialize the payment store
+  const { payments, initialize: initPayments } = usePaymentStore();
+
+  // Initialize all required stores
+  useEffect(() => {
+    const init = async () => {
+      await Promise.all([
+        initCustomers(),
+        initOrders(),
+        initCommunications(),
+        initPayments()
+      ]);
+    };
+    init();
+  }, [initCustomers, initOrders, initCommunications, initPayments]);
 
   // Force immediate logging on component mount
   React.useEffect(() => {
@@ -145,8 +158,15 @@ export default function CustomerDetails() {
         // Load orders and communications
         await Promise.all([
           initOrders(),
-          initCommunications()
+          initCommunications(id, user)
         ]);
+
+        console.log('Communication Initialization Details:', {
+          customerId: id,
+          customerObject: customer,
+          customerStoreLength: customers.length,
+          user: user ? { id: user.id, name: user.name } : null
+        });
 
         if (mounted) {
           setLoading(false);
@@ -171,7 +191,7 @@ export default function CustomerDetails() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [showSendMessageModal, setShowSendMessageModal] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
@@ -190,52 +210,56 @@ export default function CustomerDetails() {
   const calculateCustomerOrderStats = useCallback(() => {
     if (!id) return;
 
-    // Find the current customer
     const currentCustomer = customers.find(c => c.id === id);
     if (!currentCustomer) {
       console.error('No customer found with ID:', id);
       return;
     }
 
-    // Filter orders for this specific customer using phone number or ID
-    const customerOrders = orders.filter(order => 
-      order.customerId === id || 
-      order.customerPhone === currentCustomer.phone
-    );
+    // Filter orders for this specific customer using ID only
+    const customerOrders = orders.filter(order => order.customerId === id);
 
-    // Calculate total orders and total revenue
+    // Calculate total orders and payments
     const stats = {
       totalOrders: customerOrders.length,
       revenue: customerOrders.reduce((total, order) => {
-        // Ensure we're using a number and handle potential undefined
-        const orderTotal = Number(order.totalAmount || 0);
-        return total + orderTotal;
+        // Get all payments for this order
+        const orderPayments = payments.filter(payment => payment.orderId === order.id);
+        const paidAmount = orderPayments.reduce((sum, payment) => 
+          sum + Number(payment.amount || 0), 
+          0
+        );
+        return total + paidAmount;
       }, 0),
       outstanding: customerOrders.reduce((total, order) => {
+        // Calculate total amount for the order
         const totalAmount = Number(order.totalAmount || 0);
-        const paidAmount = Number(order.paidAmount || 0);
+        
+        // Get all payments for this order
+        const orderPayments = payments.filter(payment => payment.orderId === order.id);
+        const paidAmount = orderPayments.reduce((sum, payment) => 
+          sum + Number(payment.amount || 0), 
+          0
+        );
+        
         return total + (totalAmount - paidAmount);
       }, 0)
     };
 
     console.log('Customer Order Stats:', {
       customerId: id,
-      customerPhone: currentCustomer.phone,
       totalOrders: stats.totalOrders,
-      totalRevenue: stats.revenue,
-      outstanding: stats.outstanding
+      paidRevenue: stats.revenue,
+      outstanding: stats.outstanding,
+      orderIds: customerOrders.map(o => o.id),
+      payments: payments.filter(p => customerOrders.some(o => o.id === p.orderId))
     });
 
     setCustomerOrderStats(stats);
-  }, [id, customers, orders]);
+  }, [id, customers, orders, payments]);
 
-  // Recalculate stats when orders or customer ID changes
+  // Recalculate stats when orders, payments, or customer ID changes
   useEffect(() => {
-    console.log('CustomerDetails useEffect triggered:', {
-      customerId: id,
-      ordersLength: orders.length,
-      customerOrderStats
-    });
     calculateCustomerOrderStats();
   }, [calculateCustomerOrderStats]);
 
@@ -297,23 +321,6 @@ export default function CustomerDetails() {
       setToastType('error');
       setShowToast(true);
     }
-  };
-
-  const handleSendMessage = () => {
-    const messageTemplate = `Hi ${customer?.firstName}
-
-You can now log in and get real time updates & documents on your Company and Account order.
-go to https://admin.mgaccountants.co.za/portal
-
-Username: ${customer?.email}
-Passport number: ${customer?.passportNumber}
-
-For aftercare you can send me a WhatsApp +447462252406
-
-Thank you for choosing MG Accountants.`;
-
-    setShowMessageModal(true);
-    setPrefilledMessage(messageTemplate);
   };
 
   const renderCustomerDetail = (label: string, value: string | undefined, icon: React.ReactNode) => (
@@ -446,7 +453,13 @@ Thank you for choosing MG Accountants.`;
           Edit Customer
         </button>
         <button
-          onClick={handleSendMessage}
+          onClick={() => {
+            if (!customerData?.phone) {
+              toast.error('Please add a phone number for this customer first');
+              return;
+            }
+            setShowSendMessageModal(true);
+          }}
           className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
         >
           <MessageSquare className="h-4 w-4 mr-2" />
@@ -545,7 +558,7 @@ Thank you for choosing MG Accountants.`;
                             to={`/orders/${order.id}`}
                             className="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300"
                           >
-                            #{order.id}
+                            {order.orderNumber ? `#${order.orderNumber}` : `Order ${order.id}`}
                           </Link>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
@@ -573,19 +586,19 @@ Thank you for choosing MG Accountants.`;
 
           {/* Customer Order Stats */}
           <div className="grid grid-cols-3 gap-4 mt-4">
-            <div className="bg-gray-100 p-4 rounded-lg text-center">
-              <h3 className="text-sm font-semibold text-gray-600">Total Orders</h3>
-              <p className="text-2xl font-bold text-gray-800">{customerOrderStats.totalOrders}</p>
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg text-center shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-300">Total Orders</h3>
+              <p className="text-2xl font-bold text-gray-800 dark:text-white">{customerOrderStats.totalOrders}</p>
             </div>
-            <div className="bg-gray-100 p-4 rounded-lg text-center">
-              <h3 className="text-sm font-semibold text-gray-600">Total Revenue</h3>
-              <p className="text-2xl font-bold text-green-600">
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg text-center shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-300">Total Revenue</h3>
+              <p className="text-2xl font-bold text-green-600 dark:text-green-400">
                 ${customerOrderStats.revenue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
-            <div className="bg-gray-100 p-4 rounded-lg text-center">
-              <h3 className="text-sm font-semibold text-gray-600">Outstanding Balance</h3>
-              <p className="text-2xl font-bold text-red-600">
+            <div className="bg-white dark:bg-gray-800 p-4 rounded-lg text-center shadow-sm">
+              <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-300">Outstanding Balance</h3>
+              <p className="text-2xl font-bold text-red-600 dark:text-red-400">
                 ${customerOrderStats.outstanding.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
@@ -617,11 +630,22 @@ Thank you for choosing MG Accountants.`;
         />
       )}
 
-      {showMessageModal && (
-        <SendCustomerMessageModal
-          customer={customerData}
-          messageTemplate={prefilledMessage}
-          onClose={() => setShowMessageModal(false)}
+      {showSendMessageModal && customerData && customerData.phone && (
+        <SendMessageModal
+          isOpen={showSendMessageModal}
+          onClose={() => setShowSendMessageModal(false)}
+          recipient={customerData}
+          messageTemplate={`Hi ${customerData.firstName}
+
+You can now log in and get real time updates & documents on your Company and Account order.
+go to https://admin.mgaccountants.co.za/portal
+
+Username: ${customerData.email}
+${customerData.passportNumber ? `Passport number: ${customerData.passportNumber}` : ''}
+
+For aftercare you can send me a WhatsApp +447462252406
+
+Thank you for choosing MG Accountants.`}
         />
       )}
 

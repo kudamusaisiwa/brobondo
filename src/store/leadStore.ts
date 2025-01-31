@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { collection, query, getDocs, doc, setDoc, updateDoc, onSnapshot, Timestamp, where, orderBy, arrayUnion, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { manychatApi } from '../services/manychat';
+import { manyContactApi } from '../services/manycontact';
 
 export interface Note {
   id?: string;
@@ -21,12 +21,13 @@ export interface Lead {
   tags?: string[];
   customFields?: Record<string, any>;
   lastSync: Timestamp;
+  lastMessageAt?: Timestamp;
   status: 'new' | 'contacted' | 'qualified' | 'converted' | 'lost';
   notes?: Note[] | string | null;
   hidden?: boolean;
   convertedToCustomer?: boolean;
   convertedAt?: Timestamp;
-  manyChatId?: string;
+  manyContactId?: string;
   statusHistory?: {
     status: Lead['status'];
     changedAt: Timestamp;
@@ -40,7 +41,7 @@ interface LeadStore {
   loading: boolean;
   error: string | null;
   initialize: () => Promise<void>;
-  syncWithManyChat: () => Promise<void>;
+  syncWithManyContact: () => Promise<void>;
   updateLeadStatus: (leadId: string, status: Lead['status']) => Promise<void>;
   addLeadNote: (leadId: string, note: Note) => Promise<void>;
   hideLead: (leadId: string) => Promise<void>;
@@ -56,10 +57,11 @@ export const useLeadStore = create<LeadStore>((set, get) => ({
     try {
       set({ loading: true, error: null });
       const leadsRef = collection(db, 'leads');
+      
+      // Temporary solution until composite index is created
       const q = query(
         leadsRef,
-        where('hidden', '==', false),
-        orderBy('lastSync', 'desc')
+        where('hidden', '==', false)
       );
       
       // Set up real-time listener
@@ -69,7 +71,22 @@ export const useLeadStore = create<LeadStore>((set, get) => ({
           const data = doc.data() as Lead;
           leadsList.push({ ...data, id: doc.id });
         });
-        set({ leads: leadsList, loading: false });
+
+        // Sort leads with messages first, then by lastSync
+        const sortedLeads = leadsList.sort((a, b) => {
+          // First, sort by lastMessageAt if available
+          const aMessageTime = a.lastMessageAt?.toMillis() || 0;
+          const bMessageTime = b.lastMessageAt?.toMillis() || 0;
+          
+          if (aMessageTime !== bMessageTime) {
+            return bMessageTime - aMessageTime;
+          }
+          
+          // If lastMessageAt is the same (or both null), sort by lastSync
+          return b.lastSync.toMillis() - a.lastSync.toMillis();
+        });
+
+        set({ leads: sortedLeads, loading: false });
       }, (error) => {
         console.error('Error fetching leads:', error);
         set({ error: error.message, loading: false });
@@ -82,10 +99,10 @@ export const useLeadStore = create<LeadStore>((set, get) => ({
     }
   },
 
-  syncWithManyChat: async () => {
+  syncWithManyContact: async () => {
     try {
       // Check if a sync has been performed recently
-      const lastSyncKey = 'lastManyChatSync';
+      const lastSyncKey = 'lastManyContactSync';
       const lastSync = localStorage.getItem(lastSyncKey);
       const currentTime = Date.now();
 
@@ -97,8 +114,8 @@ export const useLeadStore = create<LeadStore>((set, get) => ({
 
       set({ loading: true, error: null });
       
-      // Perform ManyChat sync
-      const response = await manychatApi.syncLeads();
+      // Perform ManyContact sync
+      const response = await manyContactApi.syncLeads();
       
       if (response.success && response.leads && Array.isArray(response.leads)) {
         // Fetch all leads from Firestore
@@ -114,14 +131,14 @@ export const useLeadStore = create<LeadStore>((set, get) => ({
           .map(async (doc) => {
             const leadData = doc.data() as Lead;
             
-            // If the lead is from ManyChat and not locally modified, update
-            if (leadData.manyChatId) {
+            // If the lead is from ManyContact and not locally modified, update
+            if (leadData.manyContactId) {
               const updatedLeadData = response.leads.find(
-                (apiLead) => apiLead.id === leadData.manyChatId
+                (apiLead) => apiLead.id === leadData.manyContactId
               );
               
               if (updatedLeadData) {
-                // Update lead with latest data from ManyChat
+                // Update lead with latest data from ManyContact
                 return updateDoc(doc.ref, {
                   ...updatedLeadData,
                   lastSync: Timestamp.now()
@@ -137,7 +154,7 @@ export const useLeadStore = create<LeadStore>((set, get) => ({
         // Update last sync time
         localStorage.setItem(lastSyncKey, currentTime.toString());
         
-        console.log('ManyChat sync successful:', response.message);
+        console.log('ManyContact sync successful:', response.message);
         set({ loading: false });
       } else {
         // Log detailed error information
@@ -174,7 +191,7 @@ export const useLeadStore = create<LeadStore>((set, get) => ({
         locallyModified: true, // Mark as locally modified
         
         // Preserve important metadata when status changes
-        ...(currentLeadData.manyChatId && { manyChatId: currentLeadData.manyChatId }),
+        ...(currentLeadData.manyContactId && { manyContactId: currentLeadData.manyContactId }),
         ...(currentLeadData.email && { email: currentLeadData.email }),
         ...(currentLeadData.number && { number: currentLeadData.number }),
         ...(currentLeadData.name && { name: currentLeadData.name }),

@@ -61,7 +61,7 @@ export interface Customer {
   address?: string;
   notes?: string;
   passportNumber?: string;
-  manyChatId?: string;
+  manyContactId?: string;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -91,7 +91,7 @@ export interface Lead {
   hidden?: boolean;
   convertedToCustomer?: boolean;
   convertedAt?: Timestamp;
-  manyChatId?: string;
+  manyContactId?: string;
   statusHistory?: {
     status: Lead['status'];
     changedAt: Timestamp;
@@ -99,4 +99,15 @@ export interface Lead {
   changedAt: Timestamp;
   firstContactedAt?: Timestamp;
   locallyModified?: boolean; // New flag to prevent overwriting local changes
+}
+
+export type CommunicationType = 'phone' | 'whatsapp' | 'call' | 'walk-in' | 'email';
+
+export interface Communication {
+  id: string;
+  customerId: string;
+  type: CommunicationType;
+  summary: string;
+  createdBy: string;
+  createdAt: Date;
 }

@@ -6,14 +6,17 @@ import AddExpenseModal from '../components/expenses/AddExpenseModal';
 import EditExpenseModal from '../components/expenses/EditExpenseModal';
 import ExpenseList from '../components/expenses/ExpenseList';
 import ExpenseChart from '../components/expenses/ExpenseChart';
-import DateRangePicker from '../components/DateRangePicker';
 import Toast from '../components/ui/Toast';
 import type { Expense } from '../types';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
+
+type TimeRange = 'daily' | 'weekly' | 'monthly' | 'custom';
 
 export default function Expenses() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [timeRange, setTimeRange] = useState('7d');
+  const [timeRange, setTimeRange] = useState<TimeRange>('weekly');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [customStartDate, setCustomStartDate] = useState<Date | null>(null);
   const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
@@ -27,15 +30,51 @@ export default function Expenses() {
   const { expenses = [], loading, addExpense, updateExpense, deleteExpense, initialize } = useExpenseStore();
   const { user } = useAuthStore();
 
+  // Calculate date range
+  const now = new Date();
+  const startDate = new Date();
+  
+  switch (timeRange) {
+    case 'daily':
+      startDate.setHours(0, 0, 0, 0);
+      break;
+    case 'weekly':
+      startDate.setDate(startDate.getDate() - 7);
+      break;
+    case 'monthly':
+      startDate.setMonth(startDate.getMonth() - 1);
+      break;
+    case 'custom':
+      if (customStartDate && customEndDate) {
+        startDate.setTime(customStartDate.getTime());
+        now.setTime(customEndDate.getTime());
+      } else {
+        startDate.setDate(startDate.getDate() - 7);
+      }
+      break;
+  }
+
   useEffect(() => {
     initialize();
   }, [initialize]);
 
-  const handleDateRangeSelect = (startDate: Date, endDate: Date) => {
-    setCustomStartDate(startDate);
-    setCustomEndDate(endDate);
-    setTimeRange('custom');
-    setShowDatePicker(false);
+  const handleTimeRangeChange = (value: TimeRange) => {
+    setTimeRange(value);
+    if (value === 'custom') {
+      setShowDatePicker(true);
+    } else {
+      setShowDatePicker(false);
+      setCustomStartDate(null);
+      setCustomEndDate(null);
+    }
+  };
+
+  const handleDateRangeSelect = (start: Date | null, end: Date | null) => {
+    setCustomStartDate(start);
+    setCustomEndDate(end);
+    if (start && end) {
+      setShowDatePicker(false);
+    }
   };
 
   const handleAddExpense = async (expenseData: any) => {
@@ -158,25 +197,26 @@ export default function Expenses() {
             <Calendar className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
             <select
               value={timeRange}
-              onChange={(e) => {
-                if (e.target.value === 'custom') {
-                  setShowDatePicker(true);
-                } else {
-                  setTimeRange(e.target.value);
-                  setCustomStartDate(null);
-                  setCustomEndDate(null);
-                }
-              }}
+              onChange={(e) => handleTimeRangeChange(e.target.value as TimeRange)}
               className="modern-select pl-10 pr-10 py-2 dark:bg-gray-700 dark:text-white dark:border-gray-600"
             >
-              <option value="today">Today</option>
-              <option value="yesterday">Yesterday</option>
-              <option value="7d">Last 7 days</option>
-              <option value="30d">Last 30 days</option>
-              <option value="3m">Last 3 months</option>
-              <option value="12m">Last 12 months</option>
-              <option value="custom">Custom Range</option>
+              <option value="daily">Today</option>
+              <option value="weekly">This Week</option>
+              <option value="monthly">This Month</option>
+              <option value="custom">Customer Range</option>
             </select>
+            {showDatePicker && (
+              <div className="absolute mt-2 right-0 z-10">
+                <DatePicker
+                  selectsRange={true}
+                  startDate={customStartDate}
+                  endDate={customEndDate}
+                  onChange={(update: [Date | null, Date | null]) => handleDateRangeSelect(update[0], update[1])}
+                  isClearable={true}
+                  inline
+                />
+              </div>
+            )}
           </div>
 
           <button
@@ -189,10 +229,19 @@ export default function Expenses() {
       </div>
 
       {viewMode === 'chart' ? (
-        <ExpenseChart expenses={filteredExpenses} />
+        <ExpenseChart 
+          expenses={expenses} 
+          startDate={startDate}
+          endDate={now}
+        />
       ) : (
         <ExpenseList 
-          expenses={filteredExpenses} 
+          expenses={expenses}
+          timeRange={timeRange}
+          startDate={startDate}
+          endDate={now}
+          onTimeRangeChange={handleTimeRangeChange}
+          onDateRangeChange={handleDateRangeSelect}
           onEditClick={(expense) => setSelectedExpense(expense)}
           onDeleteClick={handleDeleteExpense}
         />
@@ -211,15 +260,6 @@ export default function Expenses() {
           onClose={() => setSelectedExpense(null)}
           onSave={handleEditExpense}
           expense={selectedExpense}
-        />
-      )}
-
-      {showDatePicker && (
-        <DateRangePicker
-          onSelect={handleDateRangeSelect}
-          onClose={() => setShowDatePicker(false)}
-          initialStartDate={customStartDate}
-          initialEndDate={customEndDate}
         />
       )}
 

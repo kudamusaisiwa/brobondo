@@ -37,7 +37,7 @@ export default function CustomerListHeader({
           </button>
           <button
             onClick={onAddClick}
-            className="inline-flex items-center px-2 sm:px-4 py-2 rounded-md bg-blue-600 text-sm font-semibold text-white shadow-sm hover:bg-blue-500"
+            className="btn-primary inline-flex items-center"
             title="Add Customer"
           >
             <Plus className="h-4 w-4" />

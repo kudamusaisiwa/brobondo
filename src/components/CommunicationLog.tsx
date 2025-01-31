@@ -30,17 +30,40 @@ export default function CommunicationLog({ customerId, onAddClick }: Communicati
   const { communications, loading } = useCommunicationStore();
   const { user } = useAuthStore();
 
+  // Add detailed logging for communications
+  React.useEffect(() => {
+    console.log('CommunicationLog Component - Communication Data:', {
+      totalCommunications: communications.length,
+      customerIdFilter: customerId,
+      filteredCommunications: communications.filter(comm => 
+        customerId ? comm.customerId === customerId : true
+      )
+    });
+  }, [communications, customerId]);
+
   const customerCommunications = communications
     .filter(comm => comm.customerId === customerId)
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+  console.log('Debug Communication Log:', {
+    customerId,
+    totalCommunications: communications.length,
+    customerCommunicationsCount: customerCommunications.length,
+    communications: communications.map(comm => ({
+      id: comm.id,
+      customerId: comm.customerId,
+      type: comm.type,
+      summary: comm.summary
+    }))
+  });
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 space-y-6">
       <button
         onClick={onAddClick}
-        className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors"
+        className="btn-primary w-full inline-flex items-center justify-center"
       >
-        <Plus className="h-4 w-4 mr-2" />
+        <Plus className="h-5 w-5 mr-2" />
         Add Communication
       </button>
 

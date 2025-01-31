@@ -167,7 +167,7 @@ export default function Products() {
           </button>
           <Link
             to="/products/add"
-            className="inline-flex items-center rounded-md bg-blue-600 px-2 sm:px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500"
+            className="btn-primary inline-flex items-center"
             title="Add Product"
           >
             <Plus className="h-4 w-4" />

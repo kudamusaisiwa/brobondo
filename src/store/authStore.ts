@@ -10,7 +10,8 @@ import {
   reauthenticateWithCredential,
   sendPasswordResetEmail as firebaseSendPasswordResetEmail,
   setPersistence,
-  browserLocalPersistence
+  browserLocalPersistence,
+  signInAnonymously
 } from 'firebase/auth';
 import { 
   doc, 
@@ -126,7 +127,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ loading: true, error: null });
     
     try {
-      // Query customer by email and passport
+      // Query customer by email and passport number
       const customersRef = collection(db, 'customers');
       const q = query(
         customersRef,
@@ -143,6 +144,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       const customerDoc = snapshot.docs[0];
       const customerData = customerDoc.data();
+
+      // Sign in anonymously to get a Firebase Auth token
+      await signInAnonymously(auth);
 
       // Set authenticated customer as user
       set({ 
@@ -162,13 +166,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // Update last login
       await updateDoc(doc(db, 'customers', customerDoc.id), {
-        lastLogin: Timestamp.now()
+        lastLogin: new Date()
       });
 
     } catch (error: any) {
+      console.error('Authentication error:', error);
       set({ 
-        error: error.message || 'Authentication failed',
-        loading: false 
+        loading: false,
+        error: error.message || 'Authentication failed'
       });
       throw error;
     }

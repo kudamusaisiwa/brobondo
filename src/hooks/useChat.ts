@@ -61,26 +61,36 @@ export function useChat() {
                   reactions: message.reactions || {},
                   attachment: message.attachment || undefined
                 }))
-                .sort((a, b) => a.timestamp - b.timestamp);
+                .sort((a, b) => {
+                  const aTime = a.timestamp || Date.now();
+                  const bTime = b.timestamp || Date.now();
+                  return aTime - bTime;
+                });
+              
+              // Get previous messages for comparison
+              const prevMessages = new Set(messages.map(m => m.id));
+              
+              // Find new messages
+              const newMessages = messageList.filter(msg => !prevMessages.has(msg.id));
               
               setMessages(messageList);
 
-              // Check for mentions
-              const lastMessage = messageList[messageList.length - 1];
-              if (lastMessage && user && lastMessage.mentions && lastMessage.userId !== user.id) {
-                const userMention = lastMessage.mentions[user.id];
-                if (userMention) {
-                  addNotification({
-                    message: `${lastMessage.userName} mentioned you: "${lastMessage.text}"`,
-                    type: 'mention',
-                    metadata: {
-                      messageId: lastMessage.id,
-                      userId: lastMessage.userId,
-                      userName: lastMessage.userName,
-                      mentionedBy: lastMessage.userName
-                    }
-                  });
-                }
+              // Check all new messages for mentions
+              if (user) {
+                newMessages.forEach(message => {
+                  if (message.userId !== user.id && message.mentions && message.mentions[user.id]) {
+                    addNotification({
+                      message: `${message.userName} mentioned you: "${message.text}"`,
+                      type: 'mention',
+                      metadata: {
+                        messageId: message.id,
+                        userId: message.userId,
+                        userName: message.userName,
+                        mentionedBy: message.userName
+                      }
+                    });
+                  }
+                });
               }
             } catch (error) {
               console.error('Error processing messages:', error);

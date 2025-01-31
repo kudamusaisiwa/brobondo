@@ -16,7 +16,7 @@ const timeRanges = [
   { value: 'custom', label: 'Custom Range' }
 ];
 
-type ChartMetric = 'revenue' | 'outstanding';
+type ChartMetric = 'revenue' | 'outstanding' | 'totalRevenue';
 
 export default function Dashboard() {
   const [timeRange, setTimeRange] = useState('7d');
@@ -88,6 +88,7 @@ export default function Dashboard() {
         totalOrders: 0,
         activeCustomers: 0,
         revenue: 0,
+        totalRevenue: 0,
         outstanding: 0,
         orderChange: 0,
         customerChange: 0,
@@ -97,11 +98,12 @@ export default function Dashboard() {
     try {
       return getOrderStats(timeRange, customStartDate, customEndDate);
     } catch (error) {
-      setError('Error calculating statistics');
+      console.error('Error calculating stats:', error);
       return {
         totalOrders: 0,
         activeCustomers: 0,
         revenue: 0,
+        totalRevenue: 0,
         outstanding: 0,
         orderChange: 0,
         customerChange: 0,
@@ -188,7 +190,40 @@ export default function Dashboard() {
         <div className="lg:col-span-2 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Orders</h3>
+              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+                {stats.totalOrders}
+              </p>
+              <div className="mt-1 flex items-center gap-1">
+                {stats.orderChange > 0 ? (
+                  <ArrowUpIcon className="h-4 w-4 text-green-500" />
+                ) : stats.orderChange < 0 ? (
+                  <ArrowDownIcon className="h-4 w-4 text-red-500" />
+                ) : null}
+                <p className={`text-sm ${
+                  stats.orderChange > 0 ? 'text-green-500' : 
+                  stats.orderChange < 0 ? 'text-red-500' : 
+                  'text-gray-500 dark:text-gray-400'
+                }`}>
+                  {Math.abs(stats.orderChange).toFixed(1)}% from previous period
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
               <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Revenue</h3>
+              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
+                ${stats.totalRevenue.toLocaleString()}
+              </p>
+              <div className="mt-1 flex items-center gap-1">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Expected from all orders
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Paid Revenue</h3>
               <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
                 ${stats.revenue.toLocaleString()}
               </p>
@@ -215,49 +250,7 @@ export default function Dashboard() {
               </p>
               <div className="mt-1 flex items-center gap-1">
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  From {stats.totalOrders} total orders
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Orders</h3>
-              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
-                {stats.totalOrders}
-              </p>
-              <div className="mt-1 flex items-center gap-1">
-                {stats.orderChange > 0 ? (
-                  <ArrowUpIcon className="h-4 w-4 text-green-500" />
-                ) : stats.orderChange < 0 ? (
-                  <ArrowDownIcon className="h-4 w-4 text-red-500" />
-                ) : null}
-                <p className={`text-sm ${
-                  stats.orderChange > 0 ? 'text-green-500' : 
-                  stats.orderChange < 0 ? 'text-red-500' : 
-                  'text-gray-500 dark:text-gray-400'
-                }`}>
-                  {Math.abs(stats.orderChange).toFixed(1)}% from previous period
-                </p>
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Active Customers</h3>
-              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
-                {stats.activeCustomers}
-              </p>
-              <div className="mt-1 flex items-center gap-1">
-                {stats.customerChange > 0 ? (
-                  <ArrowUpIcon className="h-4 w-4 text-green-500" />
-                ) : stats.customerChange < 0 ? (
-                  <ArrowDownIcon className="h-4 w-4 text-red-500" />
-                ) : null}
-                <p className={`text-sm ${
-                  stats.customerChange > 0 ? 'text-green-500' : 
-                  stats.customerChange < 0 ? 'text-red-500' : 
-                  'text-gray-500 dark:text-gray-400'
-                }`}>
-                  {Math.abs(stats.customerChange).toFixed(1)}% from previous period
+                  From {stats.totalOrders} orders
                 </p>
               </div>
             </div>
@@ -273,7 +266,8 @@ export default function Dashboard() {
                   onChange={(e) => setSelectedMetric(e.target.value as ChartMetric)}
                   className="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 >
-                  <option value="revenue">Total Revenue</option>
+                  <option value="revenue">Paid Revenue</option>
+                  <option value="totalRevenue">Total Revenue</option>
                   <option value="outstanding">Outstanding Payments</option>
                 </select>
               </div>
@@ -305,37 +299,14 @@ export default function Dashboard() {
                       borderRadius: '0.5rem',
                       color: '#F3F4F6'
                     }}
-                    formatter={(value: number) => [`$${value.toLocaleString()}`, selectedMetric === 'revenue' ? 'Revenue' : 'Outstanding']}
+                    formatter={(value: number) => [`$${value.toLocaleString()}`, selectedMetric === 'revenue' ? 'Paid Revenue' : selectedMetric === 'totalRevenue' ? 'Total Revenue' : 'Outstanding']}
                     labelFormatter={(label) => `Date: ${label}`}
                   />
-                  <Legend />
-                  {selectedMetric === 'revenue' ? (
-                    <Bar
-                      dataKey="revenue"
-                      name="Revenue"
-                      fill="#3B82F6"
-                      radius={[4, 4, 0, 0]}
-                      background={{ fill: '#1E3A8A', radius: [4, 4, 0, 0], opacity: 0.2 }}
-                      strokeWidth={1}
-                      stroke="#2563EB"
-                      shadowColor="#1E3A8A"
-                      shadowOffset={4}
-                      shadowBlur={6}
-                    />
-                  ) : (
-                    <Bar
-                      dataKey="outstanding"
-                      name="Outstanding"
-                      fill="#EF4444"
-                      radius={[4, 4, 0, 0]}
-                      background={{ fill: '#991B1B', radius: [4, 4, 0, 0], opacity: 0.2 }}
-                      strokeWidth={1}
-                      stroke="#DC2626"
-                      shadowColor="#991B1B"
-                      shadowOffset={4}
-                      shadowBlur={6}
-                    />
-                  )}
+                  <Bar
+                    dataKey={selectedMetric}
+                    fill={selectedMetric === 'revenue' ? '#10B981' : selectedMetric === 'totalRevenue' ? '#60A5FA' : '#F87171'}
+                    radius={[4, 4, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>

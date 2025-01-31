@@ -9,6 +9,14 @@
     --chart-text: theme('colors.gray.600');
     --chart-revenue: theme('colors.primary.500');
     --chart-outstanding: theme('colors.error.500');
+
+    /* React Select Custom Variables */
+    --input-bg: white;
+    --input-border: #e5e7eb;
+    --input-border-hover: #9ca3af;
+    --dropdown-bg: white;
+    --dropdown-hover-bg: #f3f4f6;
+    --text-primary: #111827;
   }
 
   .dark {
@@ -17,6 +25,14 @@
     --chart-text: theme('colors.gray.400');
     --chart-revenue: theme('colors.primary.400');
     --chart-outstanding: theme('colors.error.400');
+
+    /* React Select Dark Mode Variables */
+    --input-bg: #1f2937;
+    --input-border: #374151;
+    --input-border-hover: #4b5563;
+    --dropdown-bg: #1f2937;
+    --dropdown-hover-bg: #374151;
+    --text-primary: #f3f4f6;
   }
 }
 
@@ -73,5 +89,14 @@
 
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+
+  /* React Select Dark Mode Styles */
+  .dark .react-select__menu {
+    border: 1px solid var(--input-border);
+  }
+
+  .dark .react-select__option:active {
+    background-color: var(--dropdown-hover-bg);
   }
 }

@@ -58,23 +58,23 @@ export default function OmniSearch() {
 
     // Search customers
     customers.forEach(customer => {
-      const fullName = `${customer.firstName} ${customer.lastName}`.toLowerCase();
+      const fullName = `${customer.firstName || ''} ${customer.lastName || ''}`.toLowerCase();
       if (
         fullName.includes(term) ||
-        customer.email.toLowerCase().includes(term) ||
-        customer.phone.includes(term) ||
+        (customer.email && customer.email.toLowerCase().includes(term)) ||
+        (customer.phone && customer.phone.includes(term)) ||
         (customer.companyName && customer.companyName.toLowerCase().includes(term))
       ) {
         searchResults.push({
           id: `customer-${customer.id}`,
           type: 'customer',
-          title: `${customer.firstName} ${customer.lastName}`,
+          title: `${customer.firstName || ''} ${customer.lastName || ''}`.trim(),
           subtitle: customer.companyName || undefined,
           metadata: [
-            customer.email,
-            customer.phone,
-            customer.address
-          ],
+            customer.email || '',
+            customer.phone || '',
+            customer.address || ''
+          ].filter(Boolean),
           link: `/customers/${customer.id}`
         });
       }
@@ -153,7 +153,8 @@ export default function OmniSearch() {
     }
   };
 
-  const getMetadataIcon = (text: string) => {
+  const getMetadataIcon = (text: string | null | undefined) => {
+    if (!text) return MapPin;
     if (text.includes('@')) return Mail;
     if (text.includes('+')) return Phone;
     if (text.includes('Status')) return Calendar;

@@ -54,10 +54,13 @@ export function useChatInput() {
     const textBeforeMention = newMessage.slice(0, cursorPosition).replace(/@\w*$/, '');
     const textAfterMention = newMessage.slice(cursorPosition);
     
-    setNewMessage(`${textBeforeMention}@${selectedUser.name} ${textAfterMention}`);
+    // Get first name only
+    const firstName = selectedUser.name.split(' ')[0];
+    
+    setNewMessage(`${textBeforeMention}@${firstName} ${textAfterMention}`);
     setMentions(prev => ({
       ...prev,
-      [selectedUser.id]: selectedUser.name
+      [selectedUser.id]: selectedUser.name // Keep full name in mentions for backend reference
     }));
     
     setMentionSearch('');

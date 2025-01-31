@@ -77,7 +77,7 @@ export default function Users() {
         <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Users</h1>
         <Link
           to="/users/add"
-          className="inline-flex items-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500"
+          className="btn-primary inline-flex items-center"
         >
           <Plus className="mr-2 h-4 w-4" />
           Add New User

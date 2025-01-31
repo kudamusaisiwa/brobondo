@@ -33,6 +33,37 @@ const getStatusDescription = (status: string): string => {
   return descriptions[status] || '';
 };
 
+const formatDate = (date: any): string => {
+  try {
+    if (!date) return 'Date not available';
+    
+    // Handle Firestore Timestamp
+    if (typeof date.toDate === 'function') {
+      return format(date.toDate(), 'PPpp');
+    }
+    
+    // Handle Date object
+    if (date instanceof Date) {
+      return format(date, 'PPpp');
+    }
+    
+    // Handle string date
+    if (typeof date === 'string') {
+      return format(new Date(date), 'PPpp');
+    }
+    
+    // Handle timestamp number
+    if (typeof date === 'number') {
+      return format(new Date(date), 'PPpp');
+    }
+    
+    return 'Invalid date';
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return 'Date not available';
+  }
+};
+
 export default function OrderTimeline({ order }: OrderTimelineProps) {
   if (!order) {
     return (
@@ -45,10 +76,8 @@ export default function OrderTimeline({ order }: OrderTimelineProps) {
     );
   }
 
-  const statusHistory = order.statusHistory || [order.status];
-  const formatDate = (date: Date) => {
-    return format(new Date(date), 'PPpp'); // e.g., "Apr 29, 2021, 5:34 PM"
-  };
+  // Ensure we have a valid status history array
+  const statusHistory = Array.isArray(order.statusHistory) ? order.statusHistory : [order.status];
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4">
@@ -60,7 +89,7 @@ export default function OrderTimeline({ order }: OrderTimelineProps) {
             const date = index === 0 ? order.createdAt : order.updatedAt;
             
             return (
-              <li key={status}>
+              <li key={`${status}-${index}`}>
                 <div className="relative pb-8">
                   {!isLast && (
                     <span
