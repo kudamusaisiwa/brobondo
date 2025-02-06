@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
 import { Moon, Sun } from 'lucide-react';
 import Toast from '../components/ui/Toast';
+import Logo from '../components/Logo'; // Fixed import path
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -23,9 +24,11 @@ export default function Login() {
     }
   };
 
+  const location = useLocation();
+
   // If user is authenticated, redirect to dashboard
   if (isAuthenticated) {
-    return <Navigate to="/" />;
+    return <Navigate to="/admin/dashboard" replace />;
   }
 
   return (
@@ -49,18 +52,9 @@ export default function Login() {
 
       <div className="w-full max-w-md space-y-8 px-4">
         <div className="text-center">
-          <img
-            className="mx-auto h-16 w-auto"
-            src={isDarkMode 
-              ? "https://res.cloudinary.com/fresh-ideas/image/upload/v1732284592/w95dfo6gv7dckea8htsj.png"
-              : "https://res.cloudinary.com/fresh-ideas/image/upload/v1732284592/rqo2kuav7gd3ntuciejw.png"
-            }
-            alt="MG Accountants"
-          />
-          <h2 className={`mt-6 text-3xl font-bold tracking-tight ${
-            isDarkMode ? 'text-white' : 'text-gray-900'
-          }`}>
-            Welcome Back
+          <Logo width={180} className="mx-auto mb-4" />
+          <h2 className={`text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+            Sign in to your account
           </h2>
           <p className={`mt-2 text-sm ${
             isDarkMode ? 'text-gray-300' : 'text-gray-600'

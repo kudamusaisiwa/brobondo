@@ -2,6 +2,7 @@ import { useAuthStore } from '../store/authStore';
 import type { UserRole, OperationalStatus } from '../types';
 
 interface Permissions {
+  canManageLeads: boolean;
   canChangeStatus: boolean;
   canMarkAsPaid: boolean;
   canRevertPaid: boolean;
@@ -17,27 +18,26 @@ interface Permissions {
 }
 
 export function usePermissions(): Permissions {
-  const { user } = useAuthStore();
-  const role = user?.role || 'staff';
-
-  const isAdmin = role === 'admin';
-  const isManager = role === 'manager';
-  const isFinance = role === 'finance';
-  const isPrivilegedUser = isAdmin || isManager;
+  const { userRole } = useAuthStore();
+  
+  const isAdmin = userRole === 'admin';
+  const isAgent = userRole === 'agent';
+  const isPrivilegedUser = isAdmin || isAgent;
 
   return {
-    canChangeStatus: true,
-    canMarkAsPaid: isAdmin || isManager || isFinance,
-    canRevertPaid: isAdmin || isManager || isFinance,
+    canManageLeads: isPrivilegedUser,
+    canChangeStatus: isPrivilegedUser,
+    canMarkAsPaid: isAdmin,
+    canRevertPaid: isAdmin,
     canManageUsers: isAdmin,
-    canViewFinancials: isAdmin || isManager || isFinance,
-    canEditProducts: isPrivilegedUser,
+    canViewFinancials: isAdmin,
+    canEditProducts: isAdmin,
     canViewAllActivities: isPrivilegedUser,
-    canAccessReports: isAdmin || isManager || isFinance,
-    canDeleteEntities: isPrivilegedUser,
+    canAccessReports: isAdmin,
+    canDeleteEntities: isAdmin,
     canManageCustomers: isPrivilegedUser,
-    canViewUsers: isAdmin || isManager,
-    canManagePayments: isAdmin || isManager || isFinance
+    canViewUsers: isPrivilegedUser,
+    canManagePayments: isAdmin
   };
 }
 

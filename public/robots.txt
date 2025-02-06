@@ -1,24 +1,29 @@
+# Allow all crawlers
 User-agent: *
-Disallow: /
-Noindex: /
 
-# Disable all crawlers and bots
-User-agent: Googlebot
-Disallow: /
+# Allow public pages
+Allow: /
+Allow: /browse-properties
+Allow: /about
+Allow: /contact
+Allow: /customerform
+Allow: /property/*
+Allow: /blog
+Allow: /blog/*
 
-User-agent: Bingbot
-Disallow: /
+# Block admin pages
+Disallow: /admin/
+Disallow: /admin/*
+Disallow: /login
+Disallow: /register
+Disallow: /dashboard
+Disallow: /settings
 
-User-agent: Slurp
-Disallow: /
+# Sitemap
+Sitemap: https://brobondo.co.zw/sitemap.xml
 
-User-agent: DuckDuckBot
-Disallow: /
-
-User-agent: Baiduspider
-Disallow: /
-
-User-agent: YandexBot
+# Crawl-delay
+Crawl-delay: 10
 Disallow: /
 
 User-agent: Sogou

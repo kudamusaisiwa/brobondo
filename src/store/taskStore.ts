@@ -42,6 +42,13 @@ export const useTaskStore = create<TaskState>(
       set({ loading: true });
       
       try {
+        const { user } = useAuthStore.getState();
+        
+        if (!user) {
+          throw new Error('User not authenticated');
+        }
+
+        // Query all tasks and filter on client side based on permissions
         const q = query(
           collection(db, 'tasks'),
           orderBy('createdAt', 'desc')
@@ -49,7 +56,7 @@ export const useTaskStore = create<TaskState>(
 
         const unsubscribe = onSnapshot(q, 
           (snapshot) => {
-            const tasks = snapshot.docs.map(doc => ({
+            let tasks = snapshot.docs.map(doc => ({
               id: doc.id,
               ...doc.data(),
               createdAt: doc.data().createdAt?.toDate() || new Date(),
@@ -57,6 +64,15 @@ export const useTaskStore = create<TaskState>(
               dueDate: doc.data().dueDate?.toDate() || undefined,
               completedAt: doc.data().completedAt?.toDate() || undefined
             })) as Task[];
+
+            // Filter tasks on client side based on user role
+            if (user.role !== 'admin') {
+              tasks = tasks.filter(task => 
+                task.assignedTo === user.uid || 
+                task.assignedTo === user.email || 
+                task.assignedBy === user.uid
+              );
+            }
 
             set({ tasks, loading: false, error: null });
           },

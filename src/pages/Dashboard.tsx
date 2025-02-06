@@ -1,12 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useOrderStore } from '../store/orderStore';
+import { usePropertyStore } from '../store/propertyStore';
+import { useLeadStore } from '../store/leadStore';
 import { useAuthStore } from '../store/authStore';
-import { useTaskStore } from '../store/taskStore';
 import DateRangePicker from '../components/DateRangePicker';
 import { ArrowUpIcon, ArrowDownIcon } from '@heroicons/react/24/solid';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
-import LeaderboardCard from '../components/dashboard/LeaderboardCard.enhanced';
+import { Timestamp } from 'firebase/firestore';
+import { Building2, Home, DollarSign, Wallet, UserPlus } from 'lucide-react';
+import StatCardWithDateRange from '../components/dashboard/StatCardWithDateRange';
+import { formatCurrency } from '../utils/formatters';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 const timeRanges = [
   { value: 'today', label: 'Today' },
@@ -16,7 +22,21 @@ const timeRanges = [
   { value: 'custom', label: 'Custom Range' }
 ];
 
-type ChartMetric = 'revenue' | 'outstanding' | 'totalRevenue';
+// Create custom icon
+const customIcon = new L.Icon({
+  iconUrl: 'https://res.cloudinary.com/fresh-ideas/image/upload/v1738530487/rhcatgrkdrti8rgxphu9.png',
+  iconSize: [32, 32],
+  iconAnchor: [16, 32],
+  popupAnchor: [0, -32]
+});
+
+// Fix Leaflet marker icons
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: '/marker-icon-2x.png',
+  iconUrl: '/marker-icon.png',
+  shadowUrl: '/marker-shadow.png',
+});
 
 export default function Dashboard() {
   const [timeRange, setTimeRange] = useState('7d');
@@ -25,19 +45,10 @@ export default function Dashboard() {
   const [customEndDate, setCustomEndDate] = useState<Date | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedMetric, setSelectedMetric] = useState<ChartMetric>('revenue');
 
-  const { 
-    orders = [], 
-    getOrderStats,
-    getOrderTrends,
-    initialize: initOrders,
-    loading: storeLoading,
-    error: storeError
-  } = useOrderStore();
-
+  const { properties, initialize: initProperties, loading: storeLoading, error: storeError } = usePropertyStore();
+  const { initialize: initLeads, getNewLeadsCount } = useLeadStore();
   const { user } = useAuthStore();
-  const { tasks, initialize: initTasks } = useTaskStore();
 
   useEffect(() => {
     let mounted = true;
@@ -46,15 +57,13 @@ export default function Dashboard() {
       if (mounted) setIsLoading(true);
       
       try {
-        const [orderUnsubscribe, taskUnsubscribe] = await Promise.all([
-          initOrders(),
-          initTasks()
-        ]);
+        const unsubscribeProps = await initProperties();
+        const unsubscribeLeads = await initLeads();
         if (mounted) setIsLoading(false);
         
         return () => {
-          orderUnsubscribe?.();
-          taskUnsubscribe?.();
+          unsubscribeProps?.();
+          unsubscribeLeads?.();
         };
       } catch (error: any) {
         console.error('Error loading dashboard data:', error);
@@ -70,77 +79,120 @@ export default function Dashboard() {
     return () => {
       mounted = false;
     };
-  }, [initOrders, initTasks]);
+  }, [initProperties]);
 
-  useEffect(() => {
-    if (storeError) {
-      setError(storeError);
+  const getDateRange = () => {
+    const now = new Date();
+    let start = new Date();
+    let end = new Date();
+
+    switch (timeRange) {
+      case 'today':
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        break;
+      case 'yesterday':
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0);
+        end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+        break;
+      case '7d':
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0);
+        end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        break;
+      case '30d':
+        start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0);
+        end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        break;
+      case 'custom':
+        if (customStartDate && customEndDate) {
+          // Set start to beginning of day
+          start = new Date(customStartDate.getFullYear(), customStartDate.getMonth(), customStartDate.getDate(), 0, 0, 0);
+          // Set end to end of day
+          end = new Date(customEndDate.getFullYear(), customEndDate.getMonth(), customEndDate.getDate(), 23, 59, 59, 999);
+        }
+        break;
     }
-  }, [storeError]);
 
-  useEffect(() => {
-    setIsLoading(storeLoading);
-  }, [storeLoading]);
+    return { start, end };
+  };
+
+  const getPreviousDateRange = () => {
+    const { start, end } = getDateRange();
+    const duration = end.getTime() - start.getTime();
+    return {
+      start: new Date(start.getTime() - duration),
+      end: new Date(end.getTime() - duration)
+    };
+  };
 
   const stats = useMemo(() => {
-    if (!orders.length) {
+    const { start, end } = getDateRange();
+    const { start: prevStart, end: prevEnd } = getPreviousDateRange();
+
+    if (!properties.length) {
       return {
-        totalOrders: 0,
-        activeCustomers: 0,
-        revenue: 0,
-        totalRevenue: 0,
-        outstanding: 0,
-        orderChange: 0,
-        customerChange: 0,
-        revenueChange: 0
+        propertiesForSale: 0,
+        propertiesForRent: 0,
+        salesRevenue: 0,
+        rentalRevenue: 0,
+        newLeads: 0,
+        prevNewLeads: 0,
       };
     }
-    try {
-      return getOrderStats(timeRange, customStartDate, customEndDate);
-    } catch (error) {
-      console.error('Error calculating stats:', error);
-      return {
-        totalOrders: 0,
-        activeCustomers: 0,
-        revenue: 0,
-        totalRevenue: 0,
-        outstanding: 0,
-        orderChange: 0,
-        customerChange: 0,
-        revenueChange: 0
-      };
-    }
-  }, [getOrderStats, timeRange, customStartDate, customEndDate, orders]);
 
-  const trends = useMemo(() => {
-    if (!orders.length) return [];
-    try {
-      const result = getOrderTrends(timeRange, customStartDate, customEndDate);
-      return result.map(item => ({
-        ...item,
-        date: format(new Date(item.date), 'MMM d'),
-      }));
-    } catch (error) {
-      return [];
-    }
-  }, [getOrderTrends, timeRange, customStartDate, customEndDate, orders]);
+    // Filter properties within the current date range
+    const currentProperties = properties.filter(p => {
+      if (!p.listedAt) return false;
+      
+      // Convert Firestore Timestamp to Date if needed
+      try {
+        const date = p.listedAt instanceof Timestamp ? p.listedAt.toDate() : p.listedAt;
+        if (!(date instanceof Date)) return false;
+        
+        const dateTime = date.getTime();
+        return dateTime >= start.getTime() && dateTime <= end.getTime();
+      } catch (error) {
+        console.error('Error processing date:', error);
+        return false;
+      }
+    });
 
-  const handleTimeRangeChange = (newRange: string) => {
-    if (newRange === 'custom') {
-      setShowDatePicker(true);
-    } else {
-      setTimeRange(newRange);
-      setCustomStartDate(null);
-      setCustomEndDate(null);
-    }
-  };
+    // Filter properties within the previous date range
+    const prevProperties = properties.filter(p => {
+      if (!p.listedAt) return false;
+      
+      // Convert Firestore Timestamp to Date if needed
+      try {
+        const date = p.listedAt instanceof Timestamp ? p.listedAt.toDate() : p.listedAt;
+        if (!(date instanceof Date)) return false;
+        
+        const dateTime = date.getTime();
+        return dateTime >= prevStart.getTime() && dateTime <= prevEnd.getTime();
+      } catch (error) {
+        console.error('Error processing date:', error);
+        return false;
+      }
+    });
 
-  const handleDateRangeSelect = (startDate: Date, endDate: Date) => {
-    setCustomStartDate(startDate);
-    setCustomEndDate(endDate);
-    setTimeRange('custom');
-    setShowDatePicker(false);
-  };
+    return {
+      propertiesForSale: currentProperties.filter(p => p.listingType === 'sale' && p.status === 'available').length,
+      propertiesForRent: currentProperties.filter(p => p.listingType === 'rental' && p.status === 'available').length,
+      salesRevenue: currentProperties
+        .filter(p => p.listingType === 'sale' && p.status === 'sold')
+        .reduce((total, p) => total + p.price, 0),
+      rentalRevenue: currentProperties
+        .filter(p => p.listingType === 'rental' && p.status === 'rented')
+        .reduce((total, p) => total + p.price, 0),
+      prevSalesRevenue: prevProperties
+        .filter(p => p.listingType === 'sale' && p.status === 'sold')
+        .reduce((total, p) => total + p.price, 0),
+      prevRentalRevenue: prevProperties
+        .filter(p => p.listingType === 'rental' && p.status === 'rented')
+        .reduce((total, p) => total + p.price, 0),
+      newLeads: getNewLeadsCount(start, end),
+      prevNewLeads: getNewLeadsCount(prevStart, prevEnd),
+    };
+  }, [properties, timeRange, customStartDate, customEndDate]);
 
   if (isLoading) {
     return (
@@ -166,7 +218,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-4">
           <select
             value={timeRange}
-            onChange={(e) => handleTimeRangeChange(e.target.value)}
+            onChange={(e) => setTimeRange(e.target.value)}
             className="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
           >
             {timeRanges.map(range => (
@@ -178,7 +230,12 @@ export default function Dashboard() {
           
           {showDatePicker && (
             <DateRangePicker
-              onSelect={handleDateRangeSelect}
+              onSelect={(start, end) => {
+                setCustomStartDate(start);
+                setCustomEndDate(end);
+                setTimeRange('custom');
+                setShowDatePicker(false);
+              }}
               onClose={() => setShowDatePicker(false)}
             />
           )}
@@ -186,162 +243,127 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Orders</h3>
-              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
-                {stats.totalOrders}
-              </p>
-              <div className="mt-1 flex items-center gap-1">
-                {stats.orderChange > 0 ? (
-                  <ArrowUpIcon className="h-4 w-4 text-green-500" />
-                ) : stats.orderChange < 0 ? (
-                  <ArrowDownIcon className="h-4 w-4 text-red-500" />
-                ) : null}
-                <p className={`text-sm ${
-                  stats.orderChange > 0 ? 'text-green-500' : 
-                  stats.orderChange < 0 ? 'text-red-500' : 
-                  'text-gray-500 dark:text-gray-400'
-                }`}>
-                  {Math.abs(stats.orderChange).toFixed(1)}% from previous period
-                </p>
-              </div>
-            </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        <StatCardWithDateRange
+          title="New Leads"
+          value={stats.newLeads}
+          icon={UserPlus}
+          iconColor="text-blue-500"
+          startDate={getDateRange().start}
+          endDate={getDateRange().end}
+          previousValue={stats.prevNewLeads}
+        />
 
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Revenue</h3>
-              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
-                ${stats.totalRevenue.toLocaleString()}
-              </p>
-              <div className="mt-1 flex items-center gap-1">
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Expected from all orders
-                </p>
-              </div>
-            </div>
+        <StatCardWithDateRange
+          title="Properties for Sale"
+          value={stats.propertiesForSale}
+          icon={Building2}
+          iconColor="text-blue-500"
+          startDate={getDateRange().start}
+          endDate={getDateRange().end}
+        />
 
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Paid Revenue</h3>
-              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
-                ${stats.revenue.toLocaleString()}
-              </p>
-              <div className="mt-1 flex items-center gap-1">
-                {stats.revenueChange > 0 ? (
-                  <ArrowUpIcon className="h-4 w-4 text-green-500" />
-                ) : stats.revenueChange < 0 ? (
-                  <ArrowDownIcon className="h-4 w-4 text-red-500" />
-                ) : null}
-                <p className={`text-sm ${
-                  stats.revenueChange > 0 ? 'text-green-500' : 
-                  stats.revenueChange < 0 ? 'text-red-500' : 
-                  'text-gray-500 dark:text-gray-400'
-                }`}>
-                  {Math.abs(stats.revenueChange).toFixed(1)}% from previous period
-                </p>
-              </div>
-            </div>
+        <StatCardWithDateRange
+          title="Properties for Rent"
+          value={stats.propertiesForRent}
+          icon={Home}
+          iconColor="text-green-500"
+          startDate={getDateRange().start}
+          endDate={getDateRange().end}
+        />
 
-            <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Outstanding Balance</h3>
-              <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">
-                ${stats.outstanding.toLocaleString()}
-              </p>
-              <div className="mt-1 flex items-center gap-1">
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  From {stats.totalOrders} orders
-                </p>
-              </div>
-            </div>
+        <StatCardWithDateRange
+          title="Sales Revenue"
+          value={formatCurrency(stats.salesRevenue)}
+          icon={DollarSign}
+          iconColor="text-yellow-500"
+          startDate={getDateRange().start}
+          endDate={getDateRange().end}
+          previousValue={stats.prevSalesRevenue}
+        />
+
+        <StatCardWithDateRange
+          title="Rental Revenue"
+          value={formatCurrency(stats.rentalRevenue)}
+          icon={Wallet}
+          iconColor="text-purple-500"
+          startDate={getDateRange().start}
+          endDate={getDateRange().end}
+          previousValue={stats.prevRentalRevenue}
+        />
+      </div>
+
+      {/* Property Map */}
+      <div className="mt-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+          <div className="p-4 border-b border-gray-100 dark:border-gray-700">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Property Locations</h2>
           </div>
-
-          {/* Revenue Chart */}
-          <div className="mt-6 bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Revenue Metrics</h2>
-              <div className="flex items-center space-x-4">
-                <select
-                  value={selectedMetric}
-                  onChange={(e) => setSelectedMetric(e.target.value as ChartMetric)}
-                  className="rounded-lg border border-gray-300 dark:border-gray-600 px-4 py-2 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
-                >
-                  <option value="revenue">Paid Revenue</option>
-                  <option value="totalRevenue">Total Revenue</option>
-                  <option value="outstanding">Outstanding Payments</option>
-                </select>
-              </div>
-            </div>
-            
-            <div className="h-96"> 
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={trends}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                  <XAxis 
-                    dataKey="date" 
-                    stroke="#6B7280"
-                    tick={{ fill: '#6B7280' }}
-                    axisLine={{ strokeWidth: 2 }}
-                  />
-                  <YAxis 
-                    stroke="#6B7280"
-                    tick={{ fill: '#6B7280' }}
-                    tickFormatter={(value) => `$${value.toLocaleString()}`}
-                    axisLine={{ strokeWidth: 2 }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1F2937',
-                      border: 'none',
-                      borderRadius: '0.5rem',
-                      color: '#F3F4F6'
-                    }}
-                    formatter={(value: number) => [`$${value.toLocaleString()}`, selectedMetric === 'revenue' ? 'Paid Revenue' : selectedMetric === 'totalRevenue' ? 'Total Revenue' : 'Outstanding']}
-                    labelFormatter={(label) => `Date: ${label}`}
-                  />
-                  <Bar
-                    dataKey={selectedMetric}
-                    fill={selectedMetric === 'revenue' ? '#10B981' : selectedMetric === 'totalRevenue' ? '#60A5FA' : '#F87171'}
-                    radius={[4, 4, 0, 0]}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+          <div className="h-[600px] w-full">
+            <MapContainer
+              center={[-17.824858, 31.053028]}  // Center on Harare by default
+              zoom={12}
+              style={{ height: '100%', width: '100%' }}
+              whenCreated={(map) => {
+                // Fit bounds to all markers if there are properties
+                const validProperties = properties.filter(p => p.location?.lat && p.location?.lng);
+                if (validProperties.length > 0) {
+                  const bounds = L.latLngBounds(
+                    validProperties.map(p => [p.location.lat, p.location.lng] as L.LatLngTuple)
+                  );
+                  // Add minimal padding and set min/max zoom for tight fit
+                  map.fitBounds(bounds, { 
+                    padding: [30, 30],  // Reduced padding
+                    maxZoom: 16,  // Allow closer zoom
+                    animate: true
+                  });
+                }
+              }}
+            >
+              <TileLayer
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+              {properties.map((property) => (
+                property.location?.lat && property.location?.lng && (
+                  <Marker
+                    key={property.id}
+                    position={[property.location.lat, property.location.lng]}
+                    icon={customIcon}
+                  >
+                    <Popup>
+                      <div className="p-2">
+                        <h3 className="font-medium text-gray-900">{property.title}</h3>
+                        <p className="text-sm text-gray-600">{property.location.address}</p>
+                        <p className="text-sm font-medium text-gray-900 mt-1">
+                          {formatCurrency(property.price)}
+                          {property.listingType === 'rental' && '/month'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {property.features.bedrooms} beds • {property.features.bathrooms} baths • {property.features.area}m²
+                        </p>
+                        <div className="mt-2">
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            property.listingType === 'sale' 
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {property.listingType === 'sale' ? 'For Sale' : 'For Rent'}
+                          </span>
+                        </div>
+                      </div>
+                    </Popup>
+                  </Marker>
+                )
+              ))}
+            </MapContainer>
           </div>
         </div>
-        <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700 mb-6">
-            <LeaderboardCard />
-          </div>
+      </div>
 
-          {/* My Tasks Summary */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">My Tasks</h2>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3">
-                <div className="text-yellow-600 dark:text-yellow-400 text-sm font-medium">Pending</div>
-                <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                  {tasks.filter(task => task.assignedTo === user?.id && task.status === 'pending').length}
-                </div>
-              </div>
-              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
-                <div className="text-blue-600 dark:text-blue-400 text-sm font-medium">In Progress</div>
-                <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                  {tasks.filter(task => task.assignedTo === user?.id && task.status === 'in-progress').length}
-                </div>
-              </div>
-              <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3">
-                <div className="text-green-600 dark:text-green-400 text-sm font-medium">Completed</div>
-                <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                  {tasks.filter(task => task.assignedTo === user?.id && task.status === 'completed').length}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Charts will go here */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        {/* Add charts later */}
       </div>
     </div>
   );

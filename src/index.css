@@ -1,6 +1,28 @@
+@import './styles/modal.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Hide scrollbar while maintaining scroll functionality */
+.hide-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+@layer utilities {
+  .hide-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
+  }
+}
 
 @layer base {
   :root {

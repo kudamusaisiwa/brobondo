@@ -25,9 +25,9 @@ export default function AddCustomerModal({ isOpen, onClose, onAdd }: AddCustomer
           </div>
 
           <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Register New Customer</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Register New Buyer</h2>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Please fill in all required fields to register a new customer.
+              Please fill in all required fields to register a new buyer.
             </p>
           </div>
 

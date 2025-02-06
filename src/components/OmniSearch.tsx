@@ -3,25 +3,29 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
   Users, 
-  Package, 
-  ClipboardList, 
+  Home,
   Building,
   Phone,
   Mail,
   MapPin,
-  Calendar
+  Calendar,
+  User,
+  UserCheck,
+  DollarSign
 } from 'lucide-react';
-import { useCustomerStore } from '../store/customerStore';
-import { useOrderStore } from '../store/orderStore';
-import { useProductStore } from '../store/productStore';
+import { usePropertyStore } from '../store/propertyStore';
+import { useTenantStore } from '../store/tenantStore';
+import { useOwnerStore } from '../store/ownerStore';
+import { useBuyerStore } from '../store/buyerStore';
 
 type SearchResult = {
   id: string;
-  type: 'customer' | 'order' | 'product';
+  type: 'property' | 'tenant' | 'owner' | 'buyer';
   title: string;
   subtitle?: string;
   metadata?: string[];
   link: string;
+  icon?: React.ReactNode;
 };
 
 export default function OmniSearch() {
@@ -32,9 +36,10 @@ export default function OmniSearch() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  const { customers } = useCustomerStore();
-  const { orders } = useOrderStore();
-  const { products } = useProductStore();
+  const { properties } = usePropertyStore();
+  const { tenants } = useTenantStore();
+  const { owners } = useOwnerStore();
+  const { buyers } = useBuyerStore();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -56,73 +61,103 @@ export default function OmniSearch() {
     const searchResults: SearchResult[] = [];
     const term = searchTerm.toLowerCase();
 
-    // Search customers
-    customers.forEach(customer => {
-      const fullName = `${customer.firstName || ''} ${customer.lastName || ''}`.toLowerCase();
+    // Search properties
+    properties.forEach(property => {
+      if (
+        property.title.toLowerCase().includes(term) ||
+        property.description?.toLowerCase().includes(term) ||
+        property.location.address.toLowerCase().includes(term)
+      ) {
+        searchResults.push({
+          id: `property-${property.id}`,
+          type: 'property',
+          title: property.title,
+          subtitle: `${property.listingType === 'sale' ? 'For Sale' : 'For Rent'} - ${property.location.address}`,
+          metadata: [
+            `$${property.price.toLocaleString()}`,
+            `${property.features.bedrooms} beds, ${property.features.bathrooms} baths`,
+            property.status
+          ],
+          link: `/admin/properties/${property.id}`,
+          icon: <Home className="h-4 w-4" />
+        });
+      }
+    });
+
+    // Search tenants
+    tenants.forEach(tenant => {
+      const fullName = `${tenant.firstName || ''} ${tenant.lastName || ''}`.toLowerCase();
       if (
         fullName.includes(term) ||
-        (customer.email && customer.email.toLowerCase().includes(term)) ||
-        (customer.phone && customer.phone.includes(term)) ||
-        (customer.companyName && customer.companyName.toLowerCase().includes(term))
+        tenant.email?.toLowerCase().includes(term) ||
+        tenant.phone?.includes(term)
       ) {
         searchResults.push({
-          id: `customer-${customer.id}`,
-          type: 'customer',
-          title: `${customer.firstName || ''} ${customer.lastName || ''}`.trim(),
-          subtitle: customer.companyName || undefined,
+          id: `tenant-${tenant.id}`,
+          type: 'tenant',
+          title: `${tenant.firstName} ${tenant.lastName}`,
+          subtitle: 'Tenant',
           metadata: [
-            customer.email || '',
-            customer.phone || '',
-            customer.address || ''
+            tenant.email || '',
+            tenant.phone || '',
+            tenant.address || ''
           ].filter(Boolean),
-          link: `/customers/${customer.id}`
+          link: `/admin/tenants/${tenant.id}`,
+          icon: <UserCheck className="h-4 w-4" />
         });
       }
     });
 
-    // Search orders
-    orders.forEach(order => {
-      const customer = customers.find(c => c.id === order.customerId);
+    // Search owners
+    owners.forEach(owner => {
+      const fullName = `${owner.firstName || ''} ${owner.lastName || ''}`.toLowerCase();
       if (
-        order.id.toLowerCase().includes(term) ||
-        (customer && `${customer.firstName} ${customer.lastName}`.toLowerCase().includes(term))
+        fullName.includes(term) ||
+        owner.email?.toLowerCase().includes(term) ||
+        owner.phone?.includes(term)
       ) {
         searchResults.push({
-          id: `order-${order.id}`,
-          type: 'order',
-          title: `Order #${order.id}`,
-          subtitle: customer ? `${customer.firstName} ${customer.lastName}` : undefined,
+          id: `owner-${owner.id}`,
+          type: 'owner',
+          title: `${owner.firstName} ${owner.lastName}`,
+          subtitle: 'Property Owner',
           metadata: [
-            `Status: ${order.status}`,
-            `Amount: $${order.totalAmount.toLocaleString()}`
-          ],
-          link: `/orders/${order.id}`
+            owner.email || '',
+            owner.phone || '',
+            owner.address || ''
+          ].filter(Boolean),
+          link: `/admin/owners/${owner.id}`,
+          icon: <Building className="h-4 w-4" />
         });
       }
     });
 
-    // Search products
-    products.forEach(product => {
+    // Search buyers
+    buyers.forEach(buyer => {
+      const fullName = `${buyer.firstName || ''} ${buyer.lastName || ''}`.toLowerCase();
       if (
-        product.name.toLowerCase().includes(term) ||
-        product.category.toLowerCase().includes(term)
+        fullName.includes(term) ||
+        buyer.email?.toLowerCase().includes(term) ||
+        buyer.phone?.includes(term)
       ) {
         searchResults.push({
-          id: `product-${product.id}`,
-          type: 'product',
-          title: product.name,
-          subtitle: product.category,
+          id: `buyer-${buyer.id}`,
+          type: 'buyer',
+          title: `${buyer.firstName} ${buyer.lastName}`,
+          subtitle: 'Potential Buyer',
           metadata: [
-            `Price: $${product.basePrice.toFixed(2)}`,
-            `Min Qty: ${product.minQuantity}`
-          ],
-          link: `/products`
+            buyer.email || '',
+            buyer.phone || '',
+            buyer.budget ? `Budget: $${buyer.budget.toLocaleString()}` : ''
+          ].filter(Boolean),
+          link: `/admin/buyers/${buyer.id}`,
+          icon: <DollarSign className="h-4 w-4" />
         });
       }
     });
 
     setResults(searchResults);
-  }, [searchTerm, customers, orders, products]);
+  }, [searchTerm, properties, tenants, owners, buyers]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -142,8 +177,14 @@ export default function OmniSearch() {
 
   const getIcon = (type: SearchResult['type']) => {
     switch (type) {
-      case 'customer':
-        return Users;
+      case 'property':
+        return Home;
+      case 'tenant':
+        return UserCheck;
+      case 'owner':
+        return Building;
+      case 'buyer':
+        return DollarSign;
       case 'order':
         return ClipboardList;
       case 'product':
@@ -168,7 +209,7 @@ export default function OmniSearch() {
         <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
         <input
           type="text"
-          placeholder="Search customers, orders, products..."
+          placeholder="Search properties, tenants, owners, buyers..."
           value={searchTerm}
           onChange={(e) => {
             setSearchTerm(e.target.value);

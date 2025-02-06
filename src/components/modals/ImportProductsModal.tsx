@@ -3,14 +3,14 @@ import { X, Upload, AlertTriangle, Download } from 'lucide-react';
 import { useProductStore } from '../../store/productStore';
 import Toast from '../ui/Toast';
 
-interface ImportProductsModalProps {
+interface ImportPropertiesModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-export default function ImportProductsModal({ isOpen, onClose }: ImportProductsModalProps) {
+export default function ImportPropertiesModal({ isOpen, onClose }: ImportPropertiesModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { importProducts } = useProductStore();
+  const { importProperties } = useProductStore();
   const [loading, setLoading] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
@@ -26,14 +26,14 @@ export default function ImportProductsModal({ isOpen, onClose }: ImportProductsM
     reader.onload = async (event) => {
       try {
         const csvData = event.target?.result as string;
-        const products = parseCSV(csvData);
-        await importProducts(products);
-        setToastMessage('Products imported successfully');
+        const properties = parseCSV(csvData);
+        await importProperties(properties);
+        setToastMessage('Properties imported successfully');
         setToastType('success');
         setShowToast(true);
         onClose();
       } catch (error: any) {
-        setToastMessage(error.message || 'Failed to import products');
+        setToastMessage(error.message || 'Failed to import properties');
         setToastType('error');
         setShowToast(true);
       } finally {
@@ -86,7 +86,7 @@ export default function ImportProductsModal({ isOpen, onClose }: ImportProductsM
     const blob = new Blob([sampleData], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = 'product_import_sample.csv';
+    link.download = 'property_import_sample.csv';
     link.click();
   };
 
@@ -106,7 +106,7 @@ export default function ImportProductsModal({ isOpen, onClose }: ImportProductsM
 
           <div className="mb-4 flex items-center">
             <Upload className="h-6 w-6 text-gray-400 mr-2" />
-            <h2 className="text-xl font-semibold text-gray-900">Import Products</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Import Properties</h2>
           </div>
 
           <div className="space-y-4">

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Download, X } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
 
 export default function PWAInstallPrompt() {
+  const { isAuthenticated } = useAuthStore();
   const [showPrompt, setShowPrompt] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
@@ -9,7 +11,8 @@ export default function PWAInstallPrompt() {
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setShowPrompt(true);
+      // Only show prompt if user is authenticated
+      setShowPrompt(isAuthenticated);
     };
 
     window.addEventListener('beforeinstallprompt', handler);
@@ -17,7 +20,7 @@ export default function PWAInstallPrompt() {
     return () => {
       window.removeEventListener('beforeinstallprompt', handler);
     };
-  }, []);
+  }, [isAuthenticated]); // Add isAuthenticated to dependencies
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
@@ -34,7 +37,7 @@ export default function PWAInstallPrompt() {
     }
   };
 
-  if (!showPrompt) return null;
+  if (!showPrompt || !isAuthenticated) return null;
 
   return (
     <div className="fixed bottom-4 left-4 right-4 z-50 flex justify-center">

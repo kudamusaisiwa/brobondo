@@ -78,27 +78,28 @@ export interface CustomerDocument {
   size: number;
 }
 
+export type LeadType = 'tenant' | 'buyer';
+
+export type LeadStatus = 'new' | 'contacted' | 'qualified' | 'proposal' | 'negotiation' | 'closed' | 'lost';
+
 export interface Lead {
   id: string;
   name: string;
-  number?: string;
-  email?: string;
+  phone: string;
+  email: string;
+  type: LeadType;
+  description: string;
+  status: LeadStatus;
+  notes?: string;
   tags?: string[];
-  customFields?: Record<string, any>;
-  lastSync: Timestamp;
-  status: 'new' | 'contacted' | 'qualified' | 'converted' | 'lost';
-  notes?: Note[] | string | null;
-  hidden?: boolean;
-  convertedToCustomer?: boolean;
-  convertedAt?: Timestamp;
-  manyContactId?: string;
+  source?: string;
+  assignedTo?: string;
+  createdAt: Date;
+  updatedAt: Date;
   statusHistory?: {
-    status: Lead['status'];
-    changedAt: Timestamp;
+    status: LeadStatus;
+    changedAt: Date;
   }[];
-  changedAt: Timestamp;
-  firstContactedAt?: Timestamp;
-  locallyModified?: boolean; // New flag to prevent overwriting local changes
 }
 
 export type CommunicationType = 'phone' | 'whatsapp' | 'call' | 'walk-in' | 'email';
@@ -110,4 +111,28 @@ export interface Communication {
   summary: string;
   createdBy: string;
   createdAt: Date;
+}
+
+
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  phone?: string;
+  role: 'admin' | 'agent' | 'user';
+  active: boolean;
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+export interface AppUser {
+  id: string;
+  email: string | null;
+  firstName: string;
+  lastName: string;
+  displayName?: string;
+  role: 'admin' | 'agent' | 'user';
+  createdAt: Date;
+  updatedAt?: Date;
 }

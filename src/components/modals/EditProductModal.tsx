@@ -78,7 +78,7 @@ export default function EditProductModal({ isOpen, onClose, onSuccess, product }
             </button>
           </div>
 
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Edit Product</h2>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-6">Edit Property</h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

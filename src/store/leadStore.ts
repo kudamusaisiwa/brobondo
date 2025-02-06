@@ -1,300 +1,181 @@
 import { create } from 'zustand';
-import { collection, query, getDocs, doc, setDoc, updateDoc, onSnapshot, Timestamp, where, orderBy, arrayUnion, getDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
-import { manyContactApi } from '../services/manycontact';
+import {
+  collection,
+  query,
+  orderBy,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  Timestamp,
+  onSnapshot,
+  serverTimestamp
+} from 'firebase/firestore';
+import { auth, db } from '../lib/firebase';
+import { Lead } from '../types';
+import { createProtectedStore } from './baseStore';
 
-export interface Note {
-  id?: string;
-  text: string;
-  createdAt: Timestamp;
-  createdBy: {
-    id: string;
-    name: string;
-  };
-}
-
-export interface Lead {
-  id: string;
-  name: string;
-  number?: string;
-  email?: string;
-  tags?: string[];
-  customFields?: Record<string, any>;
-  lastSync: Timestamp;
-  lastMessageAt?: Timestamp;
-  status: 'new' | 'contacted' | 'qualified' | 'converted' | 'lost';
-  notes?: Note[] | string | null;
-  hidden?: boolean;
-  convertedToCustomer?: boolean;
-  convertedAt?: Timestamp;
-  manyContactId?: string;
-  statusHistory?: {
-    status: Lead['status'];
-    changedAt: Timestamp;
-  }[];
-  firstContactedAt?: Timestamp;
-  locallyModified?: boolean;
-}
-
-interface LeadStore {
+interface LeadState {
   leads: Lead[];
+  addLead: (lead: Omit<Lead, 'id'>) => Promise<void>;
   loading: boolean;
   error: string | null;
-  initialize: () => Promise<void>;
-  syncWithManyContact: () => Promise<void>;
-  updateLeadStatus: (leadId: string, status: Lead['status']) => Promise<void>;
-  addLeadNote: (leadId: string, note: Note) => Promise<void>;
-  hideLead: (leadId: string) => Promise<void>;
-  convertToCustomer: (leadId: string) => Promise<void>;
+  initialize: () => Promise<(() => void) | undefined>;
+  updateLead: (id: string, leadData: Partial<Lead>) => Promise<void>;
+  deleteLead: (id: string) => Promise<void>;
+  getLeadById: (id: string) => Lead | undefined;
+  getNewLeadsCount: (startDate: Date, endDate: Date) => number;
 }
 
-export const useLeadStore = create<LeadStore>((set, get) => ({
-  leads: [],
-  loading: false,
-  error: null,
+export const useLeadStore = create<LeadState>(
+  createProtectedStore((set, get) => ({
+    leads: [],
+    loading: false,
+    error: null,
 
-  initialize: async () => {
-    try {
-      set({ loading: true, error: null });
-      const leadsRef = collection(db, 'leads');
-      
-      // Temporary solution until composite index is created
-      const q = query(
-        leadsRef,
-        where('hidden', '==', false)
-      );
-      
-      // Set up real-time listener
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const leadsList: Lead[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data() as Lead;
-          leadsList.push({ ...data, id: doc.id });
+    addLead: async (lead) => {
+      try {
+        const docRef = await addDoc(collection(db, 'leads'), {
+          ...lead,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
         });
-
-        // Sort leads with messages first, then by lastSync
-        const sortedLeads = leadsList.sort((a, b) => {
-          // First, sort by lastMessageAt if available
-          const aMessageTime = a.lastMessageAt?.toMillis() || 0;
-          const bMessageTime = b.lastMessageAt?.toMillis() || 0;
-          
-          if (aMessageTime !== bMessageTime) {
-            return bMessageTime - aMessageTime;
-          }
-          
-          // If lastMessageAt is the same (or both null), sort by lastSync
-          return b.lastSync.toMillis() - a.lastSync.toMillis();
-        });
-
-        set({ leads: sortedLeads, loading: false });
-      }, (error) => {
-        console.error('Error fetching leads:', error);
-        set({ error: error.message, loading: false });
-      });
-
-      return unsubscribe;
-    } catch (error) {
-      console.error('Initialization error:', error);
-      set({ error: error instanceof Error ? error.message : 'Unknown error', loading: false });
-    }
-  },
-
-  syncWithManyContact: async () => {
-    try {
-      // Check if a sync has been performed recently
-      const lastSyncKey = 'lastManyContactSync';
-      const lastSync = localStorage.getItem(lastSyncKey);
-      const currentTime = Date.now();
-
-      // Only sync if more than 5 minutes have passed since last sync
-      if (lastSync && (currentTime - parseInt(lastSync, 10) < 5 * 60 * 1000)) {
-        console.log('Sync skipped: Recently synced');
-        return;
-      }
-
-      set({ loading: true, error: null });
-      
-      // Perform ManyContact sync
-      const response = await manyContactApi.syncLeads();
-      
-      if (response.success && response.leads && Array.isArray(response.leads)) {
-        // Fetch all leads from Firestore
-        const leadsRef = collection(db, 'leads');
-        const leadsSnapshot = await getDocs(leadsRef);
         
-        const updatePromises = leadsSnapshot.docs
-          .filter(doc => {
-            const leadData = doc.data() as Lead;
-            // Skip leads that have been locally modified
-            return !leadData.locallyModified;
-          })
-          .map(async (doc) => {
-            const leadData = doc.data() as Lead;
-            
-            // If the lead is from ManyContact and not locally modified, update
-            if (leadData.manyContactId) {
-              const updatedLeadData = response.leads.find(
-                (apiLead) => apiLead.id === leadData.manyContactId
-              );
+        // No need to update state as the onSnapshot listener will handle it
+      } catch (error) {
+        console.error('Error adding lead:', error);
+        throw error;
+      }
+    },
+
+    initialize: async () => {
+      set({ loading: true });
+      console.log('Initializing lead store...');
+      
+      try {
+        const q = query(
+          collection(db, 'leads'),
+          orderBy('createdAt', 'desc')
+        );
+
+        console.log('Setting up lead snapshot listener...');
+        const unsubscribe = onSnapshot(q, 
+          (snapshot) => {
+            const leads = snapshot.docs.map(doc => {
+              const data = doc.data();
+              console.log('Raw lead data:', { id: doc.id, ...data });
               
-              if (updatedLeadData) {
-                // Update lead with latest data from ManyContact
-                return updateDoc(doc.ref, {
-                  ...updatedLeadData,
-                  lastSync: Timestamp.now()
-                });
-              }
-            }
-            return Promise.resolve(); // Return a resolved promise for leads not updated
-          });
-        
-        // Wait for all updates to complete
-        await Promise.all(updatePromises);
-        
-        // Update last sync time
-        localStorage.setItem(lastSyncKey, currentTime.toString());
-        
-        console.log('ManyContact sync successful:', response.message);
-        set({ loading: false });
-      } else {
-        // Log detailed error information
-        console.error('Sync response:', response);
-        throw new Error(response.message || 'Sync failed: Invalid response');
-      }
-    } catch (error) {
-      console.error('Sync error:', error);
-      set({ 
-        loading: false, 
-        error: error instanceof Error ? error.message : 'Unknown sync error' 
-      });
-      
-      // Rethrow the error to allow caller to handle it
-      throw error;
-    }
-  },
-
-  updateLeadStatus: async (leadId: string, status: Lead['status']) => {
-    try {
-      console.log(`Attempting to update lead ${leadId} status to ${status}`);
-      
-      const leadRef = doc(db, 'leads', leadId);
-      
-      // Fetch current lead data before updating
-      const currentLeadSnap = await getDoc(leadRef);
-      const currentLeadData = currentLeadSnap.data() as Lead;
-      
-      // Prepare update object
-      const updateData: Partial<Lead> = {
-        status: status,
-        hidden: false, // Ensure the lead is not hidden
-        lastSync: Timestamp.now(), // Update lastSync to trigger real-time listener
-        locallyModified: true, // Mark as locally modified
-        
-        // Preserve important metadata when status changes
-        ...(currentLeadData.manyContactId && { manyContactId: currentLeadData.manyContactId }),
-        ...(currentLeadData.email && { email: currentLeadData.email }),
-        ...(currentLeadData.number && { number: currentLeadData.number }),
-        ...(currentLeadData.name && { name: currentLeadData.name }),
-        
-        // Add status change history
-        statusHistory: arrayUnion({
-          status: status,
-          changedAt: Timestamp.now(),
-        })
-      };
-      
-      // If moving to 'contacted', add additional metadata
-      if (status === 'contacted') {
-        updateData.firstContactedAt = Timestamp.now();
-      }
-      
-      // Update the document
-      await updateDoc(leadRef, updateData);
-      
-      console.log(`Lead ${leadId} status updated to ${status}`);
-    } catch (error) {
-      console.error('Error updating lead status:', error);
-      throw error;
-    }
-  },
-
-  addLeadNote: async (leadId: string, note: Note) => {
-    try {
-      console.log('Adding lead note - LeadID:', leadId);
-      console.log('Note:', note);
-      
-      const leadRef = doc(db, 'leads', leadId);
-      
-      // Fetch current lead data
-      const currentLeadSnap = await getDoc(leadRef);
-      const currentLeadData = currentLeadSnap.data() as Lead;
-      
-      // Prepare notes array
-      let updatedNotes: Note[] = [];
-      
-      // Handle existing notes
-      if (Array.isArray(currentLeadData.notes)) {
-        updatedNotes = [...currentLeadData.notes, note];
-      } else if (typeof currentLeadData.notes === 'string') {
-        // If notes is a string, convert to array
-        updatedNotes = [
-          {
-            text: currentLeadData.notes,
-            createdAt: Timestamp.now(),
-            createdBy: {
-              id: 'system',
-              name: 'System'
-            }
+              console.log('Raw lead data from Firestore:', data);
+              const lead: Lead = {
+                id: doc.id,
+                name: data.name || '',
+                email: data.email || '',
+                phone: data.phone || '',
+                status: data.status || 'new',
+                description: data.description || '',
+                notes: data.notes || '',
+                tags: data.tags || [],
+                source: data.source || '',
+                assignedTo: data.assignedTo || '',
+                convertedToCustomer: data.convertedToCustomer || false,
+                createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : 
+                          typeof data.createdAt === 'string' ? new Date(data.createdAt) : new Date(),
+                updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : 
+                          typeof data.updatedAt === 'string' ? new Date(data.updatedAt) : new Date(),
+                statusHistory: data.statusHistory || []
+              };
+              
+              return lead;
+            });
+            
+            console.log('Processed leads:', leads);
+            console.log('First lead example:', leads[0]);
+            set({ leads, loading: false, error: null });
           },
-          note
-        ];
-      } else {
-        // If no notes exist, create new array
-        updatedNotes = [note];
+          (error) => {
+            console.error('Error in lead snapshot:', error);
+            set({ error: error.message, loading: false });
+          }
+        );
+
+        return unsubscribe;
+      } catch (error) {
+        console.error('Error initializing lead store:', error);
+        set({ error: (error as Error).message, loading: false });
       }
-      
-      // Update the document
-      await updateDoc(leadRef, { 
-        notes: updatedNotes,
-        lastSync: Timestamp.now() // Update lastSync to trigger real-time listener
-      });
-      
-      console.log('Note added successfully');
-      console.log('Updated notes:', updatedNotes);
-    } catch (error) {
-      console.error('Error adding lead note:', error);
-      throw error;
-    }
-  },
+    },
 
-  hideLead: async (leadId: string) => {
-    try {
-      console.log('Hiding lead in store:', leadId);
-      const leadRef = doc(db, 'leads', leadId);
-      await updateDoc(leadRef, { 
-        hidden: true,
-        status: 'lost',
-        locallyModified: true // Mark as locally modified
-      });
-      console.log('Lead hidden in Firestore:', leadId);
-    } catch (error) {
-      console.error('Error hiding lead:', error);
-      throw error;
-    }
-  },
+    updateLead: async (id: string, leadData: Partial<Lead>) => {
+      try {
+        const leadRef = doc(db, 'leads', id);
+        const currentLead = get().leads.find(lead => lead.id === id);
+        
+        // Handle status history
+        let updateData: any = {
+          ...leadData,
+          updatedAt: serverTimestamp()
+        };
 
-  convertToCustomer: async (leadId: string) => {
-    try {
-      const leadRef = doc(db, 'leads', leadId);
-      await updateDoc(leadRef, { 
-        convertedToCustomer: true,
-        convertedAt: Timestamp.now(),
-        status: 'converted'
-      });
-      // TODO: Add logic to create a new customer record
-    } catch (error) {
-      console.error('Error converting lead to customer:', error);
-      throw error;
+        if (leadData.status && currentLead) {
+          const statusHistory = currentLead.statusHistory || [];
+          updateData.statusHistory = [
+            ...statusHistory,
+            {
+              status: leadData.status,
+              changedAt: new Date()
+            }
+          ];
+        }
+
+        await updateDoc(leadRef, updateData);
+      } catch (error) {
+        console.error('Error updating lead:', error);
+        throw error;
+      }
+    },
+
+    deleteLead: async (id: string) => {
+      try {
+        const leadRef = doc(db, 'leads', id);
+        await deleteDoc(leadRef);
+      } catch (error) {
+        console.error('Error deleting lead:', error);
+        throw error;
+      }
+    },
+
+    getLeadById: (id: string) => {
+      return get().leads.find(lead => lead.id === id);
+    },
+
+    getNewLeadsCount: (startDate: Date, endDate: Date) => {
+      return get().leads.filter(lead => {
+        if (!lead.createdAt) return false;
+
+        try {
+          // Convert Firestore Timestamp to Date if needed
+          const leadDate = lead.createdAt instanceof Timestamp 
+            ? lead.createdAt.toDate() 
+            : lead.createdAt;
+
+          // Ensure we're working with a valid Date object
+          if (!(leadDate instanceof Date)) return false;
+
+          // Ensure we're comparing Date objects
+          const leadTime = leadDate.getTime();
+          const startTime = startDate.getTime();
+          const endTime = endDate.getTime();
+
+          return (
+            lead.status === 'new' &&
+            leadTime >= startTime &&
+            leadTime <= endTime
+          );
+        } catch (error) {
+          console.error('Error processing lead date:', error);
+          return false;
+        }
+      }).length;
     }
-  }
-}));
+  }))
+);

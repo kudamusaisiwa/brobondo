@@ -15,7 +15,7 @@ import Pagination from '../components/ui/Pagination';
 import Toast from '../components/ui/Toast';
 import { Upload, Download, Plus, Search } from 'lucide-react';
 
-export default function Customers() {
+export default function Buyers() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -102,28 +102,28 @@ export default function Customers() {
   const handleAddCustomer = async (customerData: Omit<Customer, 'id' | 'createdAt' | 'updatedAt' | 'rating' | 'totalOrders' | 'totalRevenue'>) => {
     try {
       await addCustomer(customerData);
-      setToastMessage('Customer added successfully');
+      setToastMessage('Buyer added successfully');
       setToastType('success');
       setShowToast(true);
       setShowAddModal(false);
     } catch (error: any) {
-      setToastMessage(error.message || 'Failed to add customer');
+      setToastMessage(error.message || 'Failed to add buyer');
       setToastType('error');
       setShowToast(true);
     }
   };
 
   const handleEditCustomer = async (customerId: string, customerData: Partial<Customer>) => {
-    console.log('Editing Customer:', { customerId, customerData });
+    console.log('Editing Buyer:', { customerId, customerData });
     try {
       await updateCustomer(customerId, customerData);
-      setToastMessage('Customer updated successfully');
+      setToastMessage('Buyer updated successfully');
       setToastType('success');
       setShowToast(true);
       setShowEditModal(false);
     } catch (error: any) {
-      console.error('Edit Customer Error:', error);
-      setToastMessage(error.message || 'Failed to update customer');
+      console.error('Edit Buyer Error:', error);
+      setToastMessage(error.message || 'Failed to update buyer');
       setToastType('error');
       setShowToast(true);
     }
@@ -139,21 +139,21 @@ export default function Customers() {
       setSelectedCustomer(null);
       
       // Show success toast
-      setToastMessage('Customer deleted successfully');
+      setToastMessage('Buyer deleted successfully');
       setToastType('success');
       setShowToast(true);
     } catch (error) {
-      console.error('Failed to delete customer:', error);
+      console.error('Failed to delete buyer:', error);
       
       // Show error toast
-      setToastMessage('Failed to delete customer');
+      setToastMessage('Failed to delete buyer');
       setToastType('error');
       setShowToast(true);
     }
   };
 
   const handleEditCustomerClick = (customer: Customer) => {
-    console.log('Edit Customer Click:', customer);
+    console.log('Edit Buyer Click:', customer);
     setSelectedCustomer(customer);
     setShowEditModal(true);
   };
@@ -177,7 +177,7 @@ export default function Customers() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-600 dark:text-gray-400">Loading customers...</div>
+        <div className="text-gray-600 dark:text-gray-400">Loading buyers...</div>
       </div>
     );
   }
@@ -185,12 +185,12 @@ export default function Customers() {
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white hidden sm:block">Customers</h1>
+        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white hidden sm:block">Buyers</h1>
         <div className="flex space-x-2 sm:space-x-3">
           <button
             onClick={() => setShowImportModal(true)}
             className="hidden sm:inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
-            title="Import Customers"
+            title="Import Buyers"
           >
             <Upload className="h-4 w-4" />
             <span className="hidden sm:inline sm:ml-2">Import</span>
@@ -198,7 +198,7 @@ export default function Customers() {
           <button
             onClick={() => {}} // Add export functionality
             className="hidden sm:inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
-            title="Export Customers"
+            title="Export Buyers"
           >
             <Download className="h-4 w-4" />
             <span className="hidden sm:inline sm:ml-2">Export</span>
@@ -208,7 +208,7 @@ export default function Customers() {
             className="btn-primary inline-flex items-center"
           >
             <Plus className="h-5 w-5 mr-2" />
-            Add Customer
+            Add Buyer
           </button>
         </div>
       </div>
@@ -218,7 +218,7 @@ export default function Customers() {
           <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Search customers..."
+            placeholder="Search buyers..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="search-input pl-10 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 w-full"

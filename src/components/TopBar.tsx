@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, LogOut, Menu, Search } from 'lucide-react';
+import { Bell, LogOut, Menu, Search, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
 import { useThemeStore } from '../store/themeStore';
 import NotificationPanel from './NotificationPanel';
 import ThemeToggle from './ThemeToggle';
 import OmniSearch from './OmniSearch';
+import Logo from './Logo';
 
 interface TopBarProps {
   onMenuClick: () => void;
 }
 
 export default function TopBar({ onMenuClick }: TopBarProps) {
-  const { user, logout } = useAuthStore();
+  const { user, userName, logout } = useAuthStore();
   const { notifications } = useNotificationStore();
   const { isDarkMode } = useThemeStore();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -51,18 +53,18 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
           <div className="flex items-center">
             <button
               onClick={onMenuClick}
-              className="md:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
+              className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-400 md:hidden"
             >
               <Menu className="h-6 w-6" />
             </button>
-            <img
-              src={isDarkMode 
-                ? "https://res.cloudinary.com/fresh-ideas/image/upload/v1732284592/w95dfo6gv7dckea8htsj.png"
-                : "https://res.cloudinary.com/fresh-ideas/image/upload/v1732284592/rqo2kuav7gd3ntuciejw.png"
-              }
-              alt="MG Accountants"
-              className="h-10 w-auto ml-2 md:ml-0"
-            />
+            <Logo width={140} className="hidden md:block ml-4" />
+            <Link
+              to="/"
+              className="ml-4 text-sm text-gray-600 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 flex items-center"
+            >
+              <ExternalLink className="h-4 w-4 mr-1" />
+              View Public Site
+            </Link>
           </div>
 
           <div className="hidden md:block absolute left-1/2 transform -translate-x-1/2 w-1/3 min-w-[400px]">
@@ -96,9 +98,9 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
             <div className="hidden md:flex items-center space-x-3">
               <div className="flex items-center">
                 <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-medium">
-                  {user?.name ? getInitials(user.name) : '?'}
+                  {userName ? getInitials(userName) : '?'}
                 </div>
-                <span className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-100">{user?.name}</span>
+                <span className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-100">{userName}</span>
               </div>
               <button
                 onClick={() => logout()}

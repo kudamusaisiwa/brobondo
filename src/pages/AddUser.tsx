@@ -76,7 +76,7 @@ export default function AddUser() {
 
       // Navigate after a short delay
       setTimeout(() => {
-        navigate('/users');
+        navigate('/admin/users');
       }, 2000);
     } catch (error: any) {
       setToastMessage(error.message || 'Failed to create user');
@@ -209,7 +209,7 @@ export default function AddUser() {
         <div className="flex justify-end space-x-3">
           <button
             type="button"
-            onClick={() => navigate('/users')}
+            onClick={() => navigate('/admin/users')}
             className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
           >
             Cancel

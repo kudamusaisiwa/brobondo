@@ -9,7 +9,7 @@
           ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 1000"
         },
         "userId": {
-          ".validate": "newData.isString() && newData.val() === auth.uid"
+          ".validate": "newData.isString()"
         },
         "userName": {
           ".validate": "newData.isString()"
@@ -25,7 +25,7 @@
         "attachment": {
           ".validate": "!newData.exists() || (newData.hasChildren(['type', 'id', 'title']))",
           "type": {
-            ".validate": "newData.isString() && (newData.val() === 'customer' || newData.val() === 'order' || newData.val() === 'payment')"
+            ".validate": "newData.isString() && (newData.val() === 'property' || newData.val() === 'tenant' || newData.val() === 'owner' || newData.val() === 'buyer' || newData.val() === 'customer' || newData.val() === 'order' || newData.val() === 'payment')"
           },
           "id": {
             ".validate": "newData.isString()"
@@ -38,6 +38,24 @@
           },
           "amount": {
             ".validate": "!newData.exists() || newData.isNumber()"
+          },
+          "address": {
+            ".validate": "!newData.exists() || newData.isString()"
+          },
+          "status": {
+            ".validate": "!newData.exists() || newData.isString()"
+          },
+          "imageUrl": {
+            ".validate": "!newData.exists() || newData.isString()"
+          }
+        },
+        "reactions": {
+          "$emoji": {
+            ".write": "auth != null",
+            ".validate": "newData.isString() || newData.hasChildren() || newData.val() == null",
+            "$index": {
+              ".validate": "newData.val() === auth.uid"
+            }
           }
         },
         "$other": {

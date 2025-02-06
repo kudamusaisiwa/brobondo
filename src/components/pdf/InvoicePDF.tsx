@@ -175,9 +175,9 @@ const InvoicePDF: React.FC<InvoicePDFProps> = ({ order, customer }) => {
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <View style={styles.leftColumn}>
-            <Image 
-              src="https://res.cloudinary.com/fresh-ideas/image/upload/v1732284592/rqo2kuav7gd3ntuciejw.png"
+            <Image
               style={styles.logo}
+              src="https://res.cloudinary.com/fresh-ideas/image/upload/v1731768522/p4pd0uk0foxwz2gxgf4x.png"
             />
             <Text style={styles.companyInfo}>5 Bemore Gardens</Text>
             <Text style={styles.companyInfo}>Sandton 2196</Text>

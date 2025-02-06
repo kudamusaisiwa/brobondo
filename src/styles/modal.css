@@ -1,0 +1,85 @@
+.resize-handle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background: rgba(59, 130, 246, 0.3);
+  border: 2px solid rgba(59, 130, 246, 0.8);
+  border-radius: 4px;
+  opacity: 0.7;
+  transition: all 0.2s;
+  z-index: 1000;
+}
+
+.resize-handle:hover {
+  opacity: 1;
+  background: rgba(59, 130, 246, 0.5);
+}
+
+/* Positioning for the resize handles */
+.resize-handle-t {
+  top: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: n-resize;
+  height: 6px;
+  width: 100px;
+}
+
+.resize-handle-b {
+  bottom: -3px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: s-resize;
+  height: 6px;
+  width: 100px;
+}
+
+.resize-handle-l {
+  left: -3px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: w-resize;
+  width: 6px;
+  height: 100px;
+}
+
+.resize-handle-r {
+  right: -3px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: e-resize;
+  width: 6px;
+  height: 100px;
+}
+
+.resize-handle-tl {
+  top: -3px;
+  left: -3px;
+  cursor: nw-resize;
+  width: 12px;
+  height: 12px;
+}
+
+.resize-handle-tr {
+  top: -3px;
+  right: -3px;
+  cursor: ne-resize;
+  width: 12px;
+  height: 12px;
+}
+
+.resize-handle-bl {
+  bottom: -3px;
+  left: -3px;
+  cursor: sw-resize;
+  width: 12px;
+  height: 12px;
+}
+
+.resize-handle-br {
+  bottom: -3px;
+  right: -3px;
+  cursor: se-resize;
+  width: 12px;
+  height: 12px;
+}

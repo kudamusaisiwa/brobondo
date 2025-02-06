@@ -1,22 +1,23 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  plugins: [require('tailwind-scrollbar')],
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   darkMode: 'class',
   theme: {
     extend: {
       colors: {
-        // Primary Brand Colors - Teal
+        // Primary Brand Colors - Blue (HSL 238, 51%, 38%)
         primary: {
-          50: '#e6f7f7',
-          100: '#ccefef',
-          200: '#99dfdf',
-          300: '#66cfcf',
-          400: '#33bfbf',
-          500: '#046667', // Brand color
-          600: '#035c5d',
-          700: '#024445',
-          800: '#022b2c',
-          900: '#011516',
+          50: '#ECEEFF',  // Lightest
+          100: '#D8DBFF',
+          200: '#B1B7FF',
+          300: '#8A93FF',
+          400: '#636FFF',
+          500: '#3236A9', // Base color (HSL 238, 51%, 38%)
+          600: '#282B87',
+          700: '#1E2065',
+          800: '#141543',
+          900: '#0A0B22',
         },
         // Secondary Colors - Warm Gold
         secondary: {

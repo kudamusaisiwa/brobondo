@@ -1,254 +1,163 @@
 import { create } from 'zustand';
-import { 
+import {
   getAuth,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
-  createUserWithEmailAndPassword,
-  updateProfile,
-  updatePassword,
-  EmailAuthProvider,
-  reauthenticateWithCredential,
-  sendPasswordResetEmail as firebaseSendPasswordResetEmail,
-  setPersistence,
-  browserLocalPersistence,
-  signInAnonymously
+  onAuthStateChanged,
+  User,
+  createUserWithEmailAndPassword
 } from 'firebase/auth';
-import { 
-  doc, 
-  getDoc, 
-  updateDoc, 
-  setDoc, 
-  Timestamp,
-  collection,
-  query,
-  where,
-  getDocs,
-  limit
-} from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
-import { createProtectedStore } from './baseStore';
-import type { User, UserRole } from '../types';
+import { auth } from '../lib/firebase';
+import { doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
+
+type UserRole = 'admin' | 'agent' | 'user';
+
+interface UserData {
+  email: string;
+  name: string;
+  phone: string;
+  role: UserRole;
+  active: boolean;
+  password: string;
+}
 
 interface AuthState {
   user: User | null;
-  isAuthenticated: boolean;
+  userRole: UserRole | null;
+  userName: string | null;
   loading: boolean;
   error: string | null;
-  clearError: () => void;
+  isAuthenticated: boolean;
+  initialize: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
-  authenticateCustomer: (email: string, passportNumber: string) => Promise<void>;
-  skipLogin: () => Promise<void>;
   logout: () => Promise<void>;
-  createUser: (userData: {
-    email: string;
-    password: string;
-    name: string;
-    phone: string;
-    role: UserRole;
-    active: boolean;
-  }) => Promise<void>;
+  clearError: () => void;
+  createUser: (userData: UserData) => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  isAuthenticated: false,
+  userRole: null,
+  userName: null,
   loading: false,
   error: null,
-  clearError: () => set({ error: null }),
+  isAuthenticated: false,
 
-  login: async (email, password) => {
-    set({ loading: true, error: null });
-    
+  initialize: async () => {
+    console.log('Initializing auth store...');
+    set({ loading: true });
     try {
-      await setPersistence(auth, browserLocalPersistence);
-      
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-      
-      if (!userDoc.exists()) {
-        throw new Error('User account not found');
-      }
+      console.log('Setting up auth state listener...');
+      const unsubscribe = onAuthStateChanged(auth, async (user) => {
+        console.log('Auth state changed:', { user: user?.email, uid: user?.uid });
+        if (user) {
+          // Fetch user data from Firestore
+          console.log('Fetching user data from Firestore...');
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          console.log('User data from Firestore:', userDoc.data());
+          const userData = userDoc.data();
+          
+          const newState = { 
+            user,
+            userRole: userData?.role || 'user',
+            userName: userData?.name || null,
+            loading: false,
+            isAuthenticated: true
+          };
+          console.log('Setting new auth state:', newState);
+          set(newState);
+        } else {
+          set({ 
+            user: null,
+            userRole: null,
+            userName: null,
+            loading: false,
+            isAuthenticated: false
+          });
+        }
+      });
+      return unsubscribe;
+    } catch (error) {
+      set({ 
+        error: (error as Error).message, 
+        loading: false,
+        isAuthenticated: false
+      });
+    }
+  },
 
+  login: async (email: string, password: string) => {
+    set({ loading: true, error: null });
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // Fetch user data from Firestore
+      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
       const userData = userDoc.data();
       
-      if (!userData.active) {
-        throw new Error('Account is disabled');
-      }
-
-      // Update last login
-      await updateDoc(doc(db, 'users', userCredential.user.uid), {
-        lastLogin: Timestamp.now()
-      });
-
       set({ 
-        user: {
-          id: userCredential.user.uid,
-          email: userCredential.user.email!,
-          name: userData.name,
-          phone: userData.phone,
-          role: userData.role,
-          active: userData.active,
-          lastLogin: new Date()
-        },
-        isAuthenticated: true,
+        user: userCredential.user,
+        userRole: userData?.role || 'user',
+        userName: userData?.name || null,
         loading: false,
+        isAuthenticated: true,
         error: null
       });
-
     } catch (error: any) {
-      let errorMessage = 'Failed to sign in';
-      
-      switch (error.code) {
-        case 'auth/invalid-credential':
-          errorMessage = 'Invalid email or password';
-          break;
-        case 'auth/user-not-found':
-          errorMessage = 'No account found with this email';
-          break;
-        case 'auth/wrong-password':
-          errorMessage = 'Incorrect password';
-          break;
-        case 'auth/too-many-requests':
-          errorMessage = 'Too many failed attempts. Please try again later';
-          break;
-        case 'auth/user-disabled':
-          errorMessage = 'This account has been disabled';
-          break;
-        default:
-          errorMessage = error.message;
+      let errorMessage = 'Login failed';
+      if (error.code === 'auth/invalid-credential') {
+        errorMessage = 'Invalid email or password';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many attempts. Please try again later.';
       }
-      
-      set({ loading: false, error: errorMessage });
-      throw new Error(errorMessage);
-    }
-  },
-
-  authenticateCustomer: async (email, passportNumber) => {
-    set({ loading: true, error: null });
-    
-    try {
-      // Query customer by email and passport number
-      const customersRef = collection(db, 'customers');
-      const q = query(
-        customersRef,
-        where('email', '==', email.toLowerCase()),
-        where('passportNumber', '==', passportNumber.toUpperCase()),
-        limit(1)
-      );
-
-      const snapshot = await getDocs(q);
-      
-      if (snapshot.empty) {
-        throw new Error('Invalid credentials');
-      }
-
-      const customerDoc = snapshot.docs[0];
-      const customerData = customerDoc.data();
-
-      // Sign in anonymously to get a Firebase Auth token
-      await signInAnonymously(auth);
-
-      // Set authenticated customer as user
       set({ 
-        user: {
-          id: customerDoc.id,
-          email: customerData.email,
-          name: `${customerData.firstName} ${customerData.lastName}`,
-          phone: customerData.phone,
-          role: 'customer',
-          active: true,
-          lastLogin: new Date()
-        },
-        isAuthenticated: true,
+        error: errorMessage,
         loading: false,
-        error: null
+        isAuthenticated: false,
+        user: null,
+        userRole: null,
+        userName: null
       });
-
-      // Update last login
-      await updateDoc(doc(db, 'customers', customerDoc.id), {
-        lastLogin: new Date()
-      });
-
-    } catch (error: any) {
-      console.error('Authentication error:', error);
-      set({ 
-        loading: false,
-        error: error.message || 'Authentication failed'
-      });
-      throw error;
-    }
-  },
-
-  skipLogin: async () => {
-    if (process.env.NODE_ENV !== 'development') {
-      throw new Error('Skip login is only available in development mode');
-    }
-
-    set({ loading: true, error: null });
-    
-    try {
-      // Create a temporary admin user session
-      const tempUser: User = {
-        id: 'temp-admin',
-        email: 'admin@temp.dev',
-        name: 'Temporary Admin',
-        phone: '+1234567890',
-        role: 'admin',
-        active: true,
-        lastLogin: new Date()
-      };
-
-      set({ 
-        user: tempUser,
-        isAuthenticated: true,
-        loading: false,
-        error: null
-      });
-
-    } catch (error: any) {
-      set({ loading: false, error: error.message });
-      throw error;
     }
   },
 
   logout: async () => {
+    set({ loading: true, error: null });
     try {
-      const user = get().user;
-      // Only call Firebase signOut if we're not using the skip login feature
-      if (user?.id !== 'temp-admin') {
-        await firebaseSignOut(auth);
-      }
-      set({ user: null, isAuthenticated: false, error: null });
-    } catch (error: any) {
-      set({ error: error.message });
-      throw error;
+      await firebaseSignOut(auth);
+      set({ 
+        user: null, 
+        loading: false,
+        isAuthenticated: false,
+        error: null
+      });
+    } catch (error) {
+      set({ 
+        error: (error as Error).message, 
+        loading: false 
+      });
     }
   },
 
-  createUser: async (userData) => {
+  clearError: () => {
+    set({ error: null });
+  },
+
+  createUser: async (userData: UserData) => {
+    set({ loading: true, error: null });
     try {
-      set({ loading: true, error: null });
+      // Create the user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password);
+      const { uid } = userCredential.user;
 
-      // First create the Firebase auth user
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        userData.email,
-        userData.password
-      );
-
-      // Update profile
-      await updateProfile(userCredential.user, {
-        displayName: userData.name
-      });
-
-      // Create user document in Firestore
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
+      // Create the user document in Firestore
+      await setDoc(doc(db, 'users', uid), {
         email: userData.email,
         name: userData.name,
         phone: userData.phone,
         role: userData.role,
         active: userData.active,
-        lastLogin: null,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       });
@@ -256,25 +165,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ loading: false, error: null });
     } catch (error: any) {
       let errorMessage = 'Failed to create user';
-      
-      switch (error.code) {
-        case 'auth/email-already-in-use':
-          errorMessage = 'Email already in use';
-          break;
-        case 'auth/invalid-email':
-          errorMessage = 'Invalid email address';
-          break;
-        case 'auth/operation-not-allowed':
-          errorMessage = 'Email/password accounts are not enabled';
-          break;
-        case 'auth/weak-password':
-          errorMessage = 'Password is too weak';
-          break;
-        default:
-          errorMessage = error.message;
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'Email is already registered';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'Password is too weak';
       }
-      
-      set({ loading: false, error: errorMessage });
+      set({ error: errorMessage, loading: false });
       throw new Error(errorMessage);
     }
   }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ref, onValue, update, get, set } from 'firebase/database';
+import { ref, onValue, update, get, set, serverTimestamp } from 'firebase/database';
 import { rtdb } from '../lib/firebase';
 import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
@@ -15,7 +15,7 @@ export function useChat() {
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.uid) return;
 
     const initializeChat = async () => {
       try {
@@ -33,10 +33,10 @@ export function useChat() {
         }
 
         // Set user presence
-        const userPresenceRef = ref(rtdb, `presence/${user.id}`);
+        const userPresenceRef = ref(rtdb, `presence/${user.uid}`);
         await set(userPresenceRef, {
           status: 'online',
-          lastOnline: Date.now()
+          lastOnline: serverTimestamp()
         });
 
         // Subscribe to messages
@@ -78,7 +78,7 @@ export function useChat() {
               // Check all new messages for mentions
               if (user) {
                 newMessages.forEach(message => {
-                  if (message.userId !== user.id && message.mentions && message.mentions[user.id]) {
+                  if (message.userId !== user.uid && message.mentions && message.mentions[user.uid]) {
                     addNotification({
                       message: `${message.userName} mentioned you: "${message.text}"`,
                       type: 'mention',
@@ -107,19 +107,24 @@ export function useChat() {
         );
 
         // Set offline status on disconnect
-        const onDisconnectRef = ref(rtdb, `presence/${user.id}`);
+        const onDisconnectRef = ref(rtdb, `presence/${user.uid}`);
         await update(onDisconnectRef, {
           status: 'offline',
-          lastOnline: Date.now()
+          lastOnline: serverTimestamp()
         });
 
         return () => {
           unsubscribe();
           // Update status to offline on cleanup
-          set(userPresenceRef, {
-            status: 'offline',
-            lastOnline: Date.now()
-          });
+          if (user?.uid) {
+            const userRef = ref(rtdb, `presence/${user.uid}`);
+            set(userRef, {
+              status: 'offline',
+              lastOnline: serverTimestamp()
+            }).catch(error => {
+              console.error('Error updating offline status:', error);
+            });
+          }
         };
       } catch (error) {
         console.error('Error initializing chat:', error);
@@ -151,29 +156,41 @@ export function useChat() {
   };
 
   const handleReaction = async (messageId: string, emoji: string) => {
-    if (!user) return;
+    if (!user?.uid) return;
 
     try {
       const messageRef = ref(rtdb, `messages/${messageId}/reactions/${emoji}`);
       const snapshot = await get(messageRef);
-      const currentReactions = snapshot.val() || [];
+      let currentReactions = [];
+      
+      // Ensure reactions are in array format
+      if (snapshot.exists()) {
+        const val = snapshot.val();
+        if (Array.isArray(val)) {
+          currentReactions = val;
+        } else if (typeof val === 'string') {
+          currentReactions = [val];
+        }
+      }
       
       // Toggle reaction
-      const userIndex = currentReactions.indexOf(user.id);
+      const userIndex = currentReactions.indexOf(user.uid);
       if (userIndex === -1) {
         // Add reaction
-        await set(messageRef, [...currentReactions, user.id]);
+        await set(messageRef, [...currentReactions, user.uid]);
         setToastMessage('Reaction added');
+        setToastType('success');
       } else {
         // Remove reaction
         currentReactions.splice(userIndex, 1);
         if (currentReactions.length === 0) {
           // Remove the emoji key if no reactions left
-          await set(ref(rtdb, `messages/${messageId}/reactions/${emoji}`), null);
+          await set(messageRef, null);
         } else {
           await set(messageRef, currentReactions);
         }
         setToastMessage('Reaction removed');
+        setToastType('success');
       }
       setToastType('success');
       setShowToast(true);

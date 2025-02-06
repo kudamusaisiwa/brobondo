@@ -75,13 +75,18 @@ export function useChatInput() {
 
     setIsSending(true);
     try {
+      // Clean up attachment by removing undefined values
+      const cleanAttachment = attachment ? Object.fromEntries(
+        Object.entries(attachment).filter(([_, value]) => value !== undefined)
+      ) : null;
+
       const messageData = {
         text: newMessage.trim(),
-        userId: user.id,
-        userName: user.name,
+        userId: user.uid,
+        userName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
         timestamp: serverTimestamp(),
         mentions,
-        ...(attachment && { attachment })
+        ...(cleanAttachment && { attachment: cleanAttachment })
       };
 
       const messagesRef = ref(rtdb, 'messages');

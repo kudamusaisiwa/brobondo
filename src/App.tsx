@@ -1,50 +1,40 @@
+import './lib/leaflet-config';
 import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
+import CustomerForm from './pages/CustomerForm';
+import Home from './pages/Home';
+import PublicPropertyView from './pages/PublicPropertyView';
+import PublicProperties from './pages/PublicProperties';
+import About from './pages/About';
+import Contact from './pages/Contact';
 import { useThemeStore } from './store/themeStore';
-import { usePermissions } from './hooks/usePermissions';
 import { useAuthStore } from './store/authStore';
 import { useCustomerStore } from './store/customerStore';
 import { useOrderStore } from './store/orderStore';
 import { useProductStore } from './store/productStore';
 import { useActivityStore } from './store/activityStore';
 import { useUserStore } from './store/userStore';
+import { useLeadStore } from './store/leadStore';
 import { usePaymentStore } from './store/paymentStore';
+import { useTenantStore } from './store/tenantStore';
 import { useNotificationStore } from './store/notificationStore';
-import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
-import Customers from './pages/Customers';
-import CustomerDetails from './pages/CustomerDetails';
-import Orders from './pages/Orders';
-import AllOrders from './pages/AllOrders';
-import OrderDetails from './pages/OrderDetails';
-import EditOrder from './pages/EditOrder';
-import Products from './pages/Products';
-import AddProduct from './pages/AddProduct';
-import Activities from './pages/Activities';
-import Users from './pages/Users';
-import AddUser from './pages/AddUser';
-import Reports from './pages/Reports';
 import Login from './pages/Login';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
-import DeliveryCalendar from './pages/DeliveryCalendar';
-import DeliveryDayView from './pages/DeliveryDayView';
-import PaymentManagement from './pages/PaymentManagement';
-import Tasks from './pages/Tasks';
-import Expenses from './pages/Expenses';
-import Help from './pages/Help';
-import Chat from './pages/Chat';
-import Leads from './pages/Leads';
 import CustomerPortal from './pages/CustomerPortal';
-import PrivateRoute from './components/auth/PrivateRoute';
 import Toast from './components/ui/Toast';
 import CustomerLogin from './pages/CustomerLogin';
 import { Toaster } from 'react-hot-toast';
+import { AdminRoutes } from './routes/AdminRoutes';
+import { usePermissions } from './hooks/usePermissions';
 
 export default function App() {
+  const helmetContext = {};
+
   const { isDarkMode } = useThemeStore();
   const { canViewUsers } = usePermissions();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, initialize: initAuth } = useAuthStore();
   const { error: authError, clearError: clearAuthError } = useAuthStore();
   const { initialize: initCustomers } = useCustomerStore();
   const { initialize: initOrders } = useOrderStore();
@@ -52,7 +42,14 @@ export default function App() {
   const { initialize: initActivities } = useActivityStore();
   const { initialize: initUsers } = useUserStore();
   const { initialize: initPayments } = usePaymentStore();
+  const { initialize: initLeads } = useLeadStore();
+  const { initialize: initTenants } = useTenantStore();
   const { initialize: initializeNotifications, requestPermission } = useNotificationStore();
+
+  // Initialize auth
+  useEffect(() => {
+    initAuth();
+  }, [initAuth]);
 
   // Handle dark mode
   React.useEffect(() => {
@@ -74,7 +71,9 @@ export default function App() {
             initProducts(),
             initActivities(),
             initUsers(),
-            initPayments()
+            initPayments(),
+            initLeads(),
+            initTenants()
           ]);
         } catch (error) {
           console.error('Error initializing stores:', error);
@@ -83,7 +82,7 @@ export default function App() {
 
       initializeStores();
     }
-  }, [isAuthenticated, initCustomers, initOrders, initProducts, initActivities, initUsers, initPayments]);
+  }, [isAuthenticated, initCustomers, initOrders, initProducts, initActivities, initUsers, initPayments, initLeads]);
 
   useEffect(() => {
     // Initialize notifications
@@ -93,10 +92,45 @@ export default function App() {
     });
   }, [initializeNotifications, requestPermission]);
 
+  // Create router configuration
+  console.log('Creating router configuration');
+  const adminRoute = AdminRoutes();
+  console.log('Admin routes:', adminRoute);
+  
+  const router = createBrowserRouter([
+    // Public Routes
+    { path: "/", element: <Home /> },
+    { path: "/property/:slug", element: <PublicPropertyView /> },
+    { path: "/browse-properties", element: <PublicProperties /> },
+    { path: "/customerform", element: <CustomerForm /> },
+    { path: "/about", element: <About /> },
+    { path: "/contact", element: <Contact /> },
+    
+    // Auth Routes
+    { path: "/login", element: <Login /> },
+    { path: "/forgot-password", element: <ForgotPassword /> },
+    { path: "/reset-password", element: <ResetPassword /> },
+    { path: "/portal", element: <CustomerPortal /> },
+    { path: "/customer/login", element: <CustomerLogin /> },
+    
+    // Admin Routes
+    {
+      path: "/admin",
+      ...adminRoute
+    },
+    
+    // Redirects
+    { path: "/home", element: <Navigate to="/" replace /> },
+    { path: "/admin", element: <Navigate to="/admin/dashboard" replace /> },
+    { path: "/properties", element: <Navigate to="/admin/properties" replace /> },
+    { path: "/properties/*", element: <Navigate to="/admin/properties" replace /> }
+  ]);
+
   return (
-    <div className={isDarkMode ? 'dark' : ''}>
-      <Toaster 
-        position="top-right"
+    <HelmetProvider context={helmetContext}>
+      <div className={isDarkMode ? 'dark' : ''}>
+        <Toaster 
+          position="top-right"
         toastOptions={{
           duration: 4000,
           style: {
@@ -119,53 +153,22 @@ export default function App() {
           },
         }}
       />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/portal" element={<CustomerPortal />} />
-          <Route path="/customer/login" element={<CustomerLogin />} />
-          
-          <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
-            <Route index element={<Dashboard />} />
-            <Route path="customers" element={<Customers />} />
-            <Route path="leads" element={<Leads />} />
-            <Route path="customers/:id" element={<CustomerDetails />} />
-            <Route path="orders" element={<Orders />} />
-            <Route path="orders/all" element={<AllOrders />} />
-            <Route path="orders/:id" element={<OrderDetails />} />
-            <Route path="orders/:id/edit" element={<EditOrder />} />
-            <Route path="products" element={<Products />} />
-            <Route path="products/add" element={<AddProduct />} />
-            <Route path="activities" element={<Activities />} />
-            <Route path="deliveries" element={<DeliveryCalendar />} />
-            <Route path="deliveries/:date" element={<DeliveryDayView />} />
-            <Route path="payments" element={<PaymentManagement />} />
-            <Route path="tasks" element={<Tasks />} />
-            <Route path="expenses" element={<Expenses />} />
-            <Route path="chat" element={<Chat />} />
-            <Route path="help" element={<Help />} />
-            {canViewUsers ? (
-              <>
-                <Route path="users" element={<Users />} />
-                <Route path="users/add" element={<AddUser />} />
-              </>
-            ) : (
-              <Route path="users/*" element={<Navigate to="/" replace />} />
-            )}
-            <Route path="reports" element={<Reports />} />
-          </Route>
-        </Routes>
+      <RouterProvider 
+        router={router}
+        future={{
+          v7_startTransition: true,
+          v7_relativeSplatPath: true
+        }}
+      />
 
-        {authError && (
-          <Toast
-            message={authError}
-            type="error"
-            onClose={clearAuthError}
-          />
-        )}
-      </BrowserRouter>
-    </div>
+      {authError && (
+        <Toast
+          message={authError}
+          type="error"
+          onClose={clearAuthError}
+        />
+      )}
+      </div>
+    </HelmetProvider>
   );
 }

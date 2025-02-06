@@ -25,7 +25,7 @@ export default function UsersCard() {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-medium text-gray-900 dark:text-white">Users</h2>
         <Link
-          to="/users"
+          to="/admin/users"
           className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 flex items-center"
         >
           View all

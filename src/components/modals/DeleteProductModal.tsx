@@ -30,7 +30,7 @@ export default function DeleteProductModal({
 
           <div className="mb-4 flex items-center">
             <AlertTriangle className="h-6 w-6 text-red-600 mr-2" />
-            <h2 className="text-xl font-semibold text-gray-900">Delete Product</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Delete Property</h2>
           </div>
 
           <p className="text-sm text-gray-500">
@@ -48,7 +48,7 @@ export default function DeleteProductModal({
               onClick={onConfirm}
               className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
             >
-              Delete Product
+              Delete Property
             </button>
           </div>
         </div>

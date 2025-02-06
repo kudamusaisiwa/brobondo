@@ -10,7 +10,8 @@ import {
   orderBy,
   getDocs,
   updateDoc,
-  deleteDoc
+  deleteDoc,
+  getDoc
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { createProtectedStore } from './baseStore';
@@ -31,6 +32,7 @@ interface PaymentState {
     reference?: string;
     soldBy?: string;
     date?: Date;
+    createdBy: string;
   }) => Promise<string>;
   updatePayment: (id: string, payment: Partial<Payment>) => Promise<void>;
   deletePayment: (id: string) => Promise<void>;
@@ -82,12 +84,13 @@ export const usePaymentStore = create<PaymentState>(
     addPayment: async (paymentData) => {
       try {
         set({ loading: true });
-        const { user } = useAuthStore.getState();
         const { logActivity } = useActivityStore.getState();
 
-        if (!user) {
-          throw new Error('User not authenticated');
+        if (!paymentData.createdBy) {
+          throw new Error('User ID required');
         }
+
+        const paymentDate = paymentData.date || new Date();
 
         // Clean up data by removing undefined values
         const cleanPaymentData = {
@@ -96,19 +99,68 @@ export const usePaymentStore = create<PaymentState>(
           reference: paymentData.reference || null,
           soldBy: paymentData.soldBy || null,
           status: 'completed' as const,
-          createdBy: user.id,
-          date: Timestamp.fromDate(paymentData.date || new Date()),
+          createdBy: paymentData.createdBy,
+          date: Timestamp.fromDate(paymentDate),
           createdAt: Timestamp.now()
         };
 
+        // Add payment to payments collection
         const docRef = await addDoc(collection(db, 'payments'), cleanPaymentData);
+
+        // Update rental schedule with payment
+        const scheduleRef = doc(db, 'rental_schedules', paymentData.orderId);
+        const scheduleSnap = await getDoc(scheduleRef);
+        
+        if (scheduleSnap.exists()) {
+          const schedule = scheduleSnap.data();
+          const payments = [...(schedule.payments || [])];
+          
+          // Find payment with closest due date
+          const paymentDueDate = paymentDate;
+          const paymentIndex = payments.findIndex(p => {
+            const dueDate = p.dueDate?.toDate() || new Date();
+            return Math.abs(dueDate.getTime() - paymentDueDate.getTime()) < 24 * 60 * 60 * 1000; // Within 24 hours
+          });
+
+          const newPayment = {
+            id: docRef.id,
+            amount: paymentData.amount,
+            dueDate: Timestamp.fromDate(paymentDueDate),
+            paidDate: Timestamp.fromDate(paymentDate),
+            status: 'paid',
+            type: 'rent',
+            description: paymentData.notes || 'Rent Payment',
+            reference: paymentData.reference
+          };
+
+          if (paymentIndex === -1) {
+            payments.push(newPayment);
+          } else {
+            payments[paymentIndex] = {
+              ...payments[paymentIndex],
+              ...newPayment
+            };
+          }
+
+          // Sort payments by due date
+          payments.sort((a, b) => {
+            const dateA = a.dueDate?.toDate() || new Date();
+            const dateB = b.dueDate?.toDate() || new Date();
+            return dateA.getTime() - dateB.getTime();
+          });
+
+          await updateDoc(scheduleRef, {
+            payments,
+            updatedAt: Timestamp.now()
+          });
+        }
 
         // Log activity
         await logActivity({
           type: 'payment',
           message: `Payment of $${paymentData.amount} added for Order #${paymentData.orderId}`,
-          userId: user.id,
-          userName: user.name,
+          userId: paymentData.createdBy,
+          userName: 'User', // We can fetch the name separately if needed
           entityId: paymentData.orderId,
           entityType: 'order',
           metadata: {
@@ -190,13 +242,8 @@ export const usePaymentStore = create<PaymentState>(
     deletePayment: async (id) => {
       try {
         set({ loading: true });
-        const { user } = useAuthStore.getState();
         const { logActivity } = useActivityStore.getState();
         const payment = get().payments.find(p => p.id === id);
-
-        if (!user) {
-          throw new Error('User not authenticated');
-        }
 
         if (!payment) {
           throw new Error('Payment not found');
@@ -208,8 +255,8 @@ export const usePaymentStore = create<PaymentState>(
         await logActivity({
           type: 'payment_deleted',
           message: `Payment deleted for Order #${payment.orderId}`,
-          userId: user.id,
-          userName: user.name,
+          userId: payment.createdBy,
+          userName: 'User', // We can enhance this later to fetch the actual username
           entityId: payment.orderId,
           entityType: 'order',
           metadata: {

@@ -126,143 +126,146 @@ export default function EditCustomerModal({
 
           <div className="sm:flex sm:items-start">
             <div className="mt-3 w-full text-center sm:mt-0 sm:text-left">
-              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-white">Edit Customer</h3>
+              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-white">Edit Buyer</h3>
               <div className="mt-2">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        First Name
-                      </label>
-                      <input
-                        type="text"
-                        id="firstName"
-                        value={formData.firstName}
-                        onChange={(e) => handleInputChange('firstName', e.target.value)}
-                        className={`w-full p-2 border rounded-md ${
-                          errors.firstName ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                        }`}
-                        required
-                      />
-                      {errors.firstName && (
-                        <p className="text-red-500 text-xs mt-1">{errors.firstName}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Last Name
-                      </label>
-                      <input
-                        type="text"
-                        id="lastName"
-                        value={formData.lastName}
-                        onChange={(e) => handleInputChange('lastName', e.target.value)}
-                        className={`w-full p-2 border rounded-md ${
-                          errors.lastName ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                        }`}
-                        required
-                      />
-                      {errors.lastName && (
-                        <p className="text-red-500 text-xs mt-1">{errors.lastName}</p>
-                      )}
-                    </div>
-                  </div>
-
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Update the buyer's information below.
+                </p>
+              </div>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Company Name (Optional)
+                    <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      First Name
                     </label>
                     <input
                       type="text"
-                      id="companyName"
-                      value={formData.companyName}
-                      onChange={(e) => handleInputChange('companyName', e.target.value)}
-                      className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      id="email"
-                      value={formData.email}
-                      onChange={(e) => handleInputChange('email', e.target.value)}
+                      id="firstName"
+                      value={formData.firstName}
+                      onChange={(e) => handleInputChange('firstName', e.target.value)}
                       className={`w-full p-2 border rounded-md ${
-                        errors.email ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                        errors.firstName ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                       }`}
                       required
                     />
-                    {errors.email && (
-                      <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+                    {errors.firstName && (
+                      <p className="text-red-500 text-xs mt-1">{errors.firstName}</p>
                     )}
                   </div>
-
                   <div>
-                    <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Phone Number
+                    <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Last Name
                     </label>
                     <input
-                      type="tel"
-                      id="phone"
-                      value={formData.phone}
-                      onChange={(e) => handleInputChange('phone', e.target.value)}
+                      type="text"
+                      id="lastName"
+                      value={formData.lastName}
+                      onChange={(e) => handleInputChange('lastName', e.target.value)}
                       className={`w-full p-2 border rounded-md ${
-                        errors.phone ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                        errors.lastName ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                       }`}
                       required
                     />
-                    {errors.phone && (
-                      <p className="text-red-500 text-xs mt-1">{errors.phone}</p>
+                    {errors.lastName && (
+                      <p className="text-red-500 text-xs mt-1">{errors.lastName}</p>
                     )}
                   </div>
+                </div>
 
-                  <div>
-                    <label htmlFor="address" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Address (Optional)
-                    </label>
-                    <textarea
-                      id="address"
-                      value={formData.address}
-                      onChange={(e) => handleInputChange('address', e.target.value)}
-                      className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md"
-                      rows={3}
-                    />
-                  </div>
+                <div>
+                  <label htmlFor="companyName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Company Name (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    id="companyName"
+                    value={formData.companyName}
+                    onChange={(e) => handleInputChange('companyName', e.target.value)}
+                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md"
+                  />
+                </div>
 
-                  <div>
-                    <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Notes (Optional)
-                    </label>
-                    <textarea
-                      id="notes"
-                      value={formData.notes}
-                      onChange={(e) => handleInputChange('notes', e.target.value)}
-                      className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md"
-                      rows={3}
-                    />
-                  </div>
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    id="email"
+                    value={formData.email}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    className={`w-full p-2 border rounded-md ${
+                      errors.email ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                    }`}
+                    required
+                  />
+                  {errors.email && (
+                    <p className="text-red-500 text-xs mt-1">{errors.email}</p>
+                  )}
+                </div>
 
-                  <div className="flex justify-end space-x-2 mt-6">
-                    <button
-                      type="button"
-                      onClick={() => setShowDeleteModal(true)}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete Customer
-                    </button>
-                    <button
-                      type="submit"
-                      className="btn-primary inline-flex items-center"
-                    >
-                      Save Changes
-                    </button>
-                  </div>
-                </form>
-              </div>
+                <div>
+                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    id="phone"
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange('phone', e.target.value)}
+                    className={`w-full p-2 border rounded-md ${
+                      errors.phone ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                    }`}
+                    required
+                  />
+                  {errors.phone && (
+                    <p className="text-red-500 text-xs mt-1">{errors.phone}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="address" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Address (Optional)
+                  </label>
+                  <textarea
+                    id="address"
+                    value={formData.address}
+                    onChange={(e) => handleInputChange('address', e.target.value)}
+                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md"
+                    rows={3}
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Notes (Optional)
+                  </label>
+                  <textarea
+                    id="notes"
+                    value={formData.notes}
+                    onChange={(e) => handleInputChange('notes', e.target.value)}
+                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md"
+                    rows={3}
+                  />
+                </div>
+
+                <div className="flex justify-end space-x-2 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteModal(true)}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Buyer
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn-primary inline-flex items-center"
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>

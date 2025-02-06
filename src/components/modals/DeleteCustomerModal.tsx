@@ -30,11 +30,11 @@ export default function DeleteCustomerModal({
 
           <div className="mb-4 flex items-center">
             <AlertTriangle className="h-6 w-6 text-red-600 mr-2" />
-            <h2 className="text-xl font-semibold text-gray-900">Delete Customer</h2>
+            <h2 className="text-xl font-semibold text-gray-900">Delete Buyer</h2>
           </div>
 
           <p className="text-sm text-gray-500">
-            Are you sure you want to delete <span className="font-medium">{customerName}</span>? This action cannot be undone and will permanently remove the customer and all associated data from the system.
+            Are you sure you want to delete <span className="font-medium">{customerName}</span>? This action cannot be undone and will permanently remove the buyer and all associated data from the system.
           </p>
 
           <div className="mt-6 flex justify-end space-x-3">
@@ -48,7 +48,7 @@ export default function DeleteCustomerModal({
               onClick={onConfirm}
               className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700"
             >
-              Delete Customer
+              Delete Buyer
             </button>
           </div>
         </div>

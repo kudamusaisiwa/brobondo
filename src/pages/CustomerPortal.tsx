@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db } from '../lib/firebase';
 import { 
   Mail, 
   Lock, 

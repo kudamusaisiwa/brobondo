@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Mail, Phone, Shield, Edit, Ban } from 'lucide-react';
 import { useUserStore } from '../store/userStore';
@@ -7,13 +7,29 @@ import EditUserModal from '../components/modals/EditUserModal';
 import Toast from '../components/ui/Toast';
 
 export default function Users() {
-  const { users, updateUser, deleteUser } = useUserStore();
+  const { users, updateUser, deleteUser, initialize, loading, error } = useUserStore();
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [showRevokeModal, setShowRevokeModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
+
+  useEffect(() => {
+    // Initialize users and get cleanup function
+    const initUsers = async () => {
+      const cleanup = await initialize();
+      return cleanup;
+    };
+
+    // Start initialization
+    const cleanupPromise = initUsers();
+
+    // Cleanup function
+    return () => {
+      cleanupPromise.then(cleanup => cleanup?.());
+    };
+  }, [initialize]);
 
   const handleRevokeUser = async (userId: string) => {
     try {
@@ -76,7 +92,7 @@ export default function Users() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Users</h1>
         <Link
-          to="/users/add"
+          to="/admin/users/add"
           className="btn-primary inline-flex items-center"
         >
           <Plus className="mr-2 h-4 w-4" />
@@ -111,8 +127,13 @@ export default function Users() {
                 <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900 dark:text-white">
-                      {user.name}
+                      {user.name || user.email}
                     </div>
+                    {user.name !== user.email && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {user.email}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex flex-col space-y-1">

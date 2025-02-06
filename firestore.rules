@@ -1,107 +1,93 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper functions
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    function getUserData() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
     function isAdmin() {
-      return isAuthenticated() && 
-             exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-             getUserData().role == 'admin';
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     function isManager() {
-      return isAuthenticated() && 
-             exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-             (getUserData().role == 'manager' || getUserData().role == 'admin');
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'manager' ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
     }
 
     function isStaff() {
-      return isAuthenticated() && 
-             exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-             (getUserData().role in ['staff', 'manager', 'admin']);
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['staff', 'manager', 'admin'];
     }
 
-    function isValidCustomer(data) {
-      return data.keys().hasAll(['firstName', 'lastName', 'email', 'passportNumber']) &&
-             data.firstName is string && data.firstName.size() > 0 &&
-             data.lastName is string && data.lastName.size() > 0 &&
-             data.email is string && data.email.matches('^[^@]+@[^@]+\\.[^@]+$') &&
-             data.passportNumber is string && data.passportNumber.size() > 0;
+    // Public endpoints with proper validation
+    match /leads/{leadId} {
+      allow create: if request.auth == null &&
+        isWithinRateLimit(request.resource.data.ipAddress) &&
+        validateLeadData(request.resource.data);
+      allow read, update: if hasRole('manager');
+      allow delete: if hasRole('admin');
     }
 
-    // Rate limiting rules
-    function requestLimitNotExceeded() {
-      return request.time > resource.data.lastWrite + duration.value(1, 's');
-    }
-
-    // Customer collection rules
-    match /customers/{customerId} {
+    match /properties/{propertyId} {
       allow read: if true;
-      allow create, update: if isManager() && isValidCustomer(request.resource.data);
+      
+      allow create, update: if isManager() &&
+        request.resource.data.keys().hasAll(['title', 'description', 'price', 'category', 'type', 'listingType', 'ownerId', 'location', 'features']) &&
+        request.resource.data.title is string &&
+        request.resource.data.description is string &&
+        request.resource.data.price is number &&
+        request.resource.data.price >= 0 &&
+        request.resource.data.category is string &&
+        request.resource.data.type is string &&
+        request.resource.data.listingType in ['rental', 'sale'] &&
+        request.resource.data.ownerId is string &&
+        request.resource.data.location is map &&
+        request.resource.data.features is map;
+      
       allow delete: if isAdmin();
     }
 
-    // Order collection rules
-    match /orders/{orderId} {
-      allow read: if isStaff() || 
-                 (resource != null && 
-                  exists(/databases/$(database)/documents/customers/$(resource.data.customerId)));
-      allow create: if isManager() && requestLimitNotExceeded();
-      allow update: if isManager() && requestLimitNotExceeded();
-      allow delete: if isAdmin();
-    }
-
-    // Customer Documents
-    match /customerDocuments/{documentId} {
-      allow read: if true;
-      allow write: if isManager();
-    }
-
-    // Communications
-    match /communications/{communicationId} {
-      allow read: if true;
-      allow write: if isManager();
-    }
-
-    // Payments
-    match /payments/{paymentId} {
-      allow read: if true;
-      allow write: if isManager();
-    }
-
-    // User management
     match /users/{userId} {
-      allow read: if isAuthenticated() && (request.auth.uid == userId || isManager());
-      allow write: if isManager();
+      allow read: if isAuthenticated() && 
+        (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin() || 
+        (request.auth.uid == userId && 
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['name', 'email', 'phone']));
     }
 
-    // Product catalog
-    match /products/{productId} {
+    // Add proper validation functions
+    function validateLeadData(data) {
+      return data.keys().hasAll(['name', 'email', 'phone', 'description', 'ipAddress']) &&
+        data.name is string && 
+        data.name.size() >= 2 &&
+        data.name.size() <= 100 &&
+        data.email is string &&
+        data.email.matches('^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$') &&
+        data.phone is string &&
+        data.phone.matches('^\\+?[0-9]{8,15}$') &&
+        data.description is string &&
+        data.description.size() >= 10 &&
+        data.description.size() <= 1000 &&
+        !data.name.matches('.*[<>].*') &&
+        !data.description.matches('.*[<>].*') &&
+        data.ipAddress is string;
+    }
+
+    match /blog_posts/{blogId} {
       allow read: if true;
-      allow write: if isManager();
+      allow create, update: if isStaff();
+      allow delete: if isAdmin();
     }
 
-    // Activity logs
-    match /activities/{activityId} {
-      allow read, write: if true;
-    }
-
-    // Invoices
-    match /invoices/{invoiceId} {
-      allow read: if true;
-      allow write: if isManager();
-    }
-
-    // Catch-all rule for admin access
+    // Default deny
     match /{document=**} {
-      allow read, write: if isAdmin();
+      allow read, write: if false;
     }
   }
 }

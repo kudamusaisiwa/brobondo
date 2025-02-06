@@ -1,3 +1,9 @@
+# Dependencies
+node_modules
+dist
+dist-ssr
+*.local
+
 # Logs
 logs
 *.log
@@ -48,3 +54,6 @@ out/
 
 # Testing
 coverage/
+
+# Local Netlify folder
+.netlify

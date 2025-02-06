@@ -16,7 +16,7 @@ export default function ChatMessage({ message, onEdit, onReact }: ChatMessagePro
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [touchTimeout, setTouchTimeout] = useState<NodeJS.Timeout | null>(null);
   const { user } = useAuthStore();
-  const isCurrentUser = user?.id === message.userId;
+  const isCurrentUser = user?.uid === message.userId;
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -73,16 +73,37 @@ export default function ChatMessage({ message, onEdit, onReact }: ChatMessagePro
         <MessageText text={message.text} mentions={message.mentions} />
         {message.attachment && (
           <Link
-            to={`/${message.attachment.type}s/${message.attachment.id}`}
+            to={`/admin/${message.attachment.type}s/${message.attachment.id}`}
             className={`mt-2 block p-3 rounded ${
               isCurrentUser 
                 ? 'bg-blue-500 hover:bg-blue-400' 
                 : 'bg-gray-100 dark:bg-gray-600 hover:bg-gray-200 dark:hover:bg-gray-500'
             }`}
           >
+            {message.attachment.imageUrl && (
+              <div className="mb-2 rounded overflow-hidden">
+                <img 
+                  src={message.attachment.imageUrl} 
+                  alt={message.attachment.title}
+                  className="w-full h-32 object-cover"
+                />
+              </div>
+            )}
             <div className="font-medium">{message.attachment.title}</div>
             {message.attachment.subtitle && (
               <div className="text-sm opacity-75">{message.attachment.subtitle}</div>
+            )}
+            {message.attachment.address && (
+              <div className="text-sm mt-1">
+                <span className="opacity-75">📍 </span>
+                {message.attachment.address}
+              </div>
+            )}
+            {message.attachment.status && (
+              <div className="text-sm mt-1">
+                <span className="opacity-75">Status: </span>
+                {message.attachment.status}
+              </div>
             )}
             {message.attachment.amount && (
               <div className="text-sm font-medium mt-1">
