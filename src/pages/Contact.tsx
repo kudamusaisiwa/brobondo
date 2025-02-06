@@ -4,19 +4,9 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { toast } from 'react-hot-toast';
 import axios from 'axios';
-import SEO from '../components/SEO';
 
 export default function Contact() {
   const [ipAddress, setIpAddress] = useState<string>('');
-
-  return (
-    <>
-      <SEO
-        title="Contact Brobondo Real Estate - Get in Touch With Us"
-        description="Contact Brobondo Real Estate for all your property needs. Our team is ready to assist you with buying, selling, or renting properties in Zimbabwe. Get in touch today!"
-        pathname="/contact"
-      />
-
 
   // Fetch IP address on component mount
   useEffect(() => {
