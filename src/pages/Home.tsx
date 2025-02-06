@@ -1,6 +1,5 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Helmet } from 'react-helmet-async';
 import { Property } from '../types/property';
 import PropertyCard from '../components/PropertyCard';
 import HeroCarousel from '../components/HeroCarousel';
@@ -8,12 +7,16 @@ import TawkToChat from '../components/TawkToChat';
 import PublicHeader from '../components/PublicHeader';
 import Logo from '../components/Logo';
 import { usePublicProperties } from '../hooks/usePublicProperties';
+import SEO from '../components/SEO';
 
 export default function Home() {
-  const description = 'Discover your dream home with Brobondo Real Estate. Explore a wide range of properties for sale and rent, including houses, apartments, commercial spaces, and land. Our experienced agents are here to guide you through every step of the real estate process.';
-  const title = 'Brobondo Real Estate - Your Trusted Partner in Property';
-  const url = 'https://brobondo.co.zw/';
-  const imageUrl = 'https://brobondo.co.zw/images/meta-image.jpg'; // You should replace this with your actual meta image
+  return (
+    <>
+      <SEO
+        title="Brobondo Real Estate - Your Trusted Partner in Property"
+        description="Discover your dream home with Brobondo Real Estate. Explore a wide range of properties for sale and rent, including houses, apartments, commercial spaces, and land. Our experienced agents are here to guide you through every step of the real estate process."
+        pathname="/"
+      />ce this with your actual meta image
 
   const [listingFilter, setListingFilter] = React.useState<'all' | 'sale' | 'rental'>('all');
   const { properties: featuredProperties, loading, error } = usePublicProperties();

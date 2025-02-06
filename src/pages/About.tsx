@@ -1,22 +1,18 @@
 import React from 'react';
-import { Helmet } from 'react-helmet-async';
 import PublicHeader from '../components/PublicHeader';
 import { FaHandshake, FaLightbulb, FaUsers, FaChartLine, FaCog, FaHome, FaBuilding } from 'react-icons/fa';
 import { motion } from 'framer-motion';
+import SEO from '../components/SEO';
 
 export default function About(): JSX.Element {
-  const description = 'Learn about Brobondo Real Estate, a dynamic and forward-thinking real estate firm founded in 2024. We are committed to transparency, integrity, and community engagement in all our real estate services.';
-  const title = 'About Brobondo Real Estate - Building Trust Through Excellence';
-  const url = 'https://brobondo.co.zw/about';
-  const imageUrl = 'https://brobondo.co.zw/images/meta-image.jpg'; // Replace with your actual meta image
-
   return (
     <>
-      <Helmet>
-        {/* Primary Meta Tags */}
-        <title>{title}</title>
-        <meta name="description" content={description} />
-        <meta name="keywords" content="about brobondo, real estate company, property management, zimbabwe real estate, real estate services" />
+      <SEO
+        title="About Brobondo Real Estate - Building Trust Through Excellence"
+        description="Learn about Brobondo Real Estate, a dynamic and forward-thinking real estate firm founded in 2024. We are committed to transparency, integrity, and community engagement in all our real estate services."
+        pathname="/about"
+      />
+ estate company, property management, zimbabwe real estate, real estate services" />
         <meta name="author" content="Brobondo Real Estate" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         
