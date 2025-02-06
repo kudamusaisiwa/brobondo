@@ -12,13 +12,13 @@ import { getStorage } from 'firebase/storage';
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyD0XqhrVDGuxp6oTHRBwb2UFA3DFV_fcUk",
-  authDomain: "brobondo-e20e6.firebaseapp.com",
-  projectId: "brobondo-e20e6",
-  storageBucket: "brobondo-e20e6.firebasestorage.app",
-  messagingSenderId: "59908898572",
-  appId: "1:59908898572:web:88bb1dd62390d7f57dd329",
-  measurementId: "G-ZV4QEPTLFX",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
   databaseURL: "https://brobondo-e20e6-default-rtdb.firebaseio.com"
 };
 
